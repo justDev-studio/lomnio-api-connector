@@ -1,0 +1,28 @@
+{
+    "name": "justdev/lomnio-api-connector",
+    "version": "0.1.0",
+    "description": "Connects WordPress with the Lomnio API.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "justDev",
+            "homepage": "https://justdev.org"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "woocommerce/action-scheduler": "^3.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "LomnioApiConnector\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
