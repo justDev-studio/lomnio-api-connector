@@ -1,6 +1,6 @@
 {
     "name": "justdev/lomnio-api-connector",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Connects WordPress with the Lomnio API.",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
