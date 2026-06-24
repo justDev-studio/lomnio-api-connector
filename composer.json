@@ -22,6 +22,7 @@
             "includes/LomnioProject.php",
             "includes/LomnioUnits.php",
             "includes/LomnioFloors.php",
+            "includes/LomnioPages.php",
             "includes/LomnioLeads.php"
         ]
     },

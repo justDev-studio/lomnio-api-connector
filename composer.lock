@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "13b0c3da0d7901b975b5b515d8220fcc",
+    "content-hash": "8b439eaa16dac60703051200e17a8253",
     "packages": [
         {
             "name": "woocommerce/action-scheduler",

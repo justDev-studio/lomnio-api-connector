@@ -8,10 +8,13 @@
 namespace LomnioApiConnector;
 
 use LomnioApiConnector\Admin\EndpointsPage;
+use LomnioApiConnector\Admin\PageDisplaySettingsPage;
 use LomnioApiConnector\Admin\SettingsPage;
 use LomnioApiConnector\Database\FloorRepository;
 use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Database\UnitRepository;
+use LomnioApiConnector\Pages\PageRouter;
+use LomnioApiConnector\Pages\PageSettings;
 use LomnioApiConnector\Security\SecretStorage;
 use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
@@ -70,6 +73,9 @@ final class Plugin {
 		$units_sync->hooks();
 		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
 		$floors_sync->hooks();
+		$page_settings = new PageSettings();
+		$page_router   = new PageRouter( $page_settings );
+		$page_router->hooks();
 
 		if ( is_admin() ) {
 			$endpoints_page = new EndpointsPage( $project_sync, $units_sync, $floors_sync );
@@ -77,6 +83,9 @@ final class Plugin {
 
 			$settings_page = new SettingsPage( $this->secret_storage() );
 			$settings_page->hooks();
+
+			$page_display_settings_page = new PageDisplaySettingsPage( $page_settings );
+			$page_display_settings_page->hooks();
 		}
 	}
 
@@ -92,6 +101,9 @@ final class Plugin {
 
 		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
 		$floors_sync->activate();
+
+		( new PageRouter( new PageSettings() ) )->register_routes();
+		flush_rewrite_rules( false );
 	}
 
 	/**
@@ -106,6 +118,8 @@ final class Plugin {
 
 		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
 		$floors_sync->deactivate();
+
+		flush_rewrite_rules( false );
 	}
 
 	/**

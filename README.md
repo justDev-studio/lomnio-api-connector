@@ -56,6 +56,34 @@ This page allows admins to:
 - run Project, Units, or Floors sync separately;
 - check Status, Message, and Fetched / Used At.
 
+Frontend page display settings:
+
+```text
+/wp-admin/admin.php?page=lomnio-api-pages
+```
+
+This page controls the universal Lomnio frontend layer:
+
+- floor and unit route slugs;
+- phase-aware routes;
+- theme templates used for floor and unit pages;
+- Inertia component names;
+- settings/content source posts;
+- flats home page used by breadcrumbs;
+- ACF cache TTL and unit dark-header behavior.
+
+Theme templates should use the global facade:
+
+```php
+$floor = \LomnioPages::floor_number();
+$unit_id = \LomnioPages::unit_id();
+$phase = \LomnioPages::phase();
+
+$floor_url = \LomnioPages::floor_link( $phase, $floor );
+$unit_url = \LomnioPages::unit_link( $unit_id, $phase );
+$fields = \LomnioPages::fields( 'floor' );
+```
+
 Hidden API token settings page:
 
 ```text
