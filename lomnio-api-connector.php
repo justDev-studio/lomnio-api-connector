@@ -8,7 +8,7 @@
  * Plugin Name:       Lomnio API Connector
  * Plugin URI:        https://justdev.org
  * Description:       Connects WordPress with the Lomnio API.
- * Version:           0.1.1
+ * Version:           0.1.2
  * Author:            justDev
  * Author URI:        https://justdev.org
  * License:           GPL-2.0-or-later
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LOMNIO_API_CONNECTOR_VERSION', '0.1.1' );
+define( 'LOMNIO_API_CONNECTOR_VERSION', '0.1.2' );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_FILE', __FILE__ );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
