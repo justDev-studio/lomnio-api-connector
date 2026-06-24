@@ -51,8 +51,8 @@ if ( ! class_exists( 'LomnioPages' ) ) {
 			return self::context()->settings_post_id( $page );
 		}
 
-		public static function fields( string $page, $loader = null, ?bool $force_dark_header = null ): array {
-			return self::context()->fields( $page, $loader, $force_dark_header );
+		public static function fields( string $page, $loader = null ): array {
+			return self::context()->fields( $page, $loader );
 		}
 
 		public static function home_page_id(): ?int {

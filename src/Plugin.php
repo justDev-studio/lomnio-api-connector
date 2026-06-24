@@ -15,6 +15,7 @@ use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Pages\PageRouter;
 use LomnioApiConnector\Pages\PageSettings;
+use LomnioApiConnector\Pages\PageSettingsPostTypes;
 use LomnioApiConnector\Security\SecretStorage;
 use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
@@ -74,6 +75,8 @@ final class Plugin {
 		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
 		$floors_sync->hooks();
 		$page_settings = new PageSettings();
+		$page_settings_post_types = new PageSettingsPostTypes();
+		$page_settings_post_types->hooks();
 		$page_router   = new PageRouter( $page_settings );
 		$page_router->hooks();
 

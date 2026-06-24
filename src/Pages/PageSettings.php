@@ -31,6 +31,14 @@ final class PageSettings {
 	 * Save sanitized settings.
 	 */
 	public function update( array $settings ): void {
+		$settings = array_merge(
+			array(
+				'enabled'              => false,
+				'phase_routes_enabled' => false,
+			),
+			$settings
+		);
+
 		update_option( self::OPTION_NAME, array_merge( $this->defaults(), $this->sanitize( $settings ) ), false );
 		flush_rewrite_rules( false );
 	}
@@ -60,11 +68,8 @@ final class PageSettings {
 			'floor_component'         => 'Floor',
 			'unit_component'          => 'Appartment',
 			'not_found_component'     => '404',
-			'floor_settings_post_id'  => 0,
-			'unit_settings_post_id'   => 0,
 			'flats_home_page_id'      => 0,
 			'acf_cache_ttl'           => 300,
-			'force_dark_unit_header'  => true,
 		);
 	}
 
@@ -74,7 +79,7 @@ final class PageSettings {
 	private function sanitize( array $settings ): array {
 		$sanitized = array();
 
-		foreach ( array( 'enabled', 'phase_routes_enabled', 'force_dark_unit_header' ) as $key ) {
+		foreach ( array( 'enabled', 'phase_routes_enabled' ) as $key ) {
 			if ( array_key_exists( $key, $settings ) ) {
 				$sanitized[ $key ] = ! empty( $settings[ $key ] );
 			}
@@ -98,7 +103,7 @@ final class PageSettings {
 			}
 		}
 
-		foreach ( array( 'floor_settings_post_id', 'unit_settings_post_id', 'flats_home_page_id', 'acf_cache_ttl' ) as $key ) {
+		foreach ( array( 'flats_home_page_id', 'acf_cache_ttl' ) as $key ) {
 			if ( isset( $settings[ $key ] ) ) {
 				$sanitized[ $key ] = max( 0, (int) $settings[ $key ] );
 			}

@@ -121,18 +121,9 @@ final class PageDisplaySettingsPage {
 				<table class="form-table" role="presentation">
 					<tbody>
 						<?php $this->page_row( 'flats_home_page_id', __( 'Flats home page', 'lomnio-api-connector' ), (int) $settings['flats_home_page_id'] ); ?>
-						<?php $this->post_row( 'floor_settings_post_id', __( 'Floor settings post', 'lomnio-api-connector' ), (int) $settings['floor_settings_post_id'] ); ?>
-						<?php $this->post_row( 'unit_settings_post_id', __( 'Unit settings post', 'lomnio-api-connector' ), (int) $settings['unit_settings_post_id'] ); ?>
+						<?php $this->settings_post_type_row( __( 'Floor settings post', 'lomnio-api-connector' ), 'floor_settings' ); ?>
+						<?php $this->settings_post_type_row( __( 'Unit settings post', 'lomnio-api-connector' ), 'single_settings' ); ?>
 						<?php $this->number_row( 'acf_cache_ttl', __( 'ACF cache TTL', 'lomnio-api-connector' ), (int) $settings['acf_cache_ttl'] ); ?>
-						<tr>
-							<th scope="row"><?php echo esc_html__( 'Unit dark header', 'lomnio-api-connector' ); ?></th>
-							<td>
-								<label>
-									<input type="checkbox" name="lomnio_pages[force_dark_unit_header]" value="1" <?php checked( ! empty( $settings['force_dark_unit_header'] ) ); ?>>
-									<?php echo esc_html__( 'Force dark_header for unit detail pages.', 'lomnio-api-connector' ); ?>
-								</label>
-							</td>
-						</tr>
 					</tbody>
 				</table>
 
@@ -184,28 +175,36 @@ final class PageDisplaySettingsPage {
 		<?php
 	}
 
-	private function post_row( string $key, string $label, int $value ): void {
+	private function settings_post_type_row( string $label, string $post_type ): void {
 		$posts = get_posts(
 			array(
-				'post_type'      => 'any',
+				'post_type'      => $post_type,
 				'post_status'    => array( 'publish', 'draft', 'private' ),
-				'posts_per_page' => 200,
+				'posts_per_page' => -1,
 				'orderby'        => 'title',
 				'order'          => 'ASC',
+				'suppress_filters' => false,
 			)
 		);
 		?>
 		<tr>
-			<th scope="row"><label for="lomnio_pages_<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></label></th>
+			<th scope="row"><?php echo esc_html( $label ); ?></th>
 			<td>
-				<select id="lomnio_pages_<?php echo esc_attr( $key ); ?>" name="lomnio_pages[<?php echo esc_attr( $key ); ?>]">
-					<option value="0"><?php echo esc_html__( 'Auto / legacy CPT fallback', 'lomnio-api-connector' ); ?></option>
+				<?php if ( empty( $posts ) ) : ?>
+					<a class="button" href="<?php echo esc_url( admin_url( 'post-new.php?post_type=' . $post_type ) ); ?>">
+						<?php echo esc_html__( 'Create settings page', 'lomnio-api-connector' ); ?>
+					</a>
+				<?php else : ?>
 					<?php foreach ( $posts as $post ) : ?>
-						<option value="<?php echo esc_attr( (string) $post->ID ); ?>" <?php selected( $value, (int) $post->ID ); ?>>
-							<?php echo esc_html( get_the_title( $post ) . ' (' . get_post_type( $post ) . ' #' . $post->ID . ')' ); ?>
-						</option>
+						<a href="<?php echo esc_url( get_edit_post_link( $post->ID, '' ) ); ?>">
+							<?php echo esc_html( get_the_title( $post ) ?: '#' . $post->ID ); ?>
+						</a>
+						<br>
 					<?php endforeach; ?>
-				</select>
+				<?php endif; ?>
+				<p class="description">
+					<?php echo esc_html__( 'One settings page is allowed per language. Use WPML translations for localized content.', 'lomnio-api-connector' ); ?>
+				</p>
 			</td>
 		</tr>
 		<?php

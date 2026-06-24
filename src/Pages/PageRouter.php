@@ -56,6 +56,10 @@ final class PageRouter {
 	public function query_vars( array $query_vars ): array {
 		$settings = $this->settings->all();
 
+		if ( empty( $settings['enabled'] ) ) {
+			return $query_vars;
+		}
+
 		foreach ( array( $settings['floor_slug'], $settings['unit_slug'], $settings['phase_query_var'] ) as $query_var ) {
 			if ( '' !== $query_var && ! in_array( $query_var, $query_vars, true ) ) {
 				$query_vars[] = $query_var;

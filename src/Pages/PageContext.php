@@ -74,13 +74,7 @@ final class PageContext {
 	}
 
 	public function settings_post_id( string $page ): ?int {
-		$settings = $this->settings();
-		$key      = 'floor' === $page ? 'floor_settings_post_id' : 'unit_settings_post_id';
-		$post_id  = isset( $settings[ $key ] ) ? (int) $settings[ $key ] : 0;
-
-		if ( $post_id <= 0 ) {
-			$post_id = $this->legacy_settings_post_id( 'floor' === $page ? 'floor_settings' : 'single_settings' );
-		}
+		$post_id = ( new PageSettingsPostTypes() )->first_post_id( 'floor' === $page ? PageSettingsPostTypes::FLOOR_POST_TYPE : PageSettingsPostTypes::UNIT_POST_TYPE );
 
 		if ( $post_id <= 0 ) {
 			return null;
@@ -92,7 +86,7 @@ final class PageContext {
 		return $translated ? (int) $translated : $post_id;
 	}
 
-	public function fields( string $page, $loader = null, ?bool $force_dark_header = null ): array {
+	public function fields( string $page, $loader = null ): array {
 		$post_id = $this->settings_post_id( $page );
 		$ttl     = max( 0, (int) $this->settings()['acf_cache_ttl'] );
 		$lang    = defined( 'ICL_LANGUAGE_CODE' ) ? ICL_LANGUAGE_CODE : get_locale();
@@ -116,14 +110,6 @@ final class PageContext {
 			},
 			$ttl
 		);
-
-		if ( null === $force_dark_header ) {
-			$force_dark_header = 'unit' === $page && ! empty( $this->settings()['force_dark_unit_header'] );
-		}
-
-		if ( $force_dark_header ) {
-			$fields['dark_header'] = true;
-		}
 
 		return $fields;
 	}
@@ -150,22 +136,6 @@ final class PageContext {
 			'description' => $description,
 			'canonical'   => $canonical,
 		);
-	}
-
-	private function legacy_settings_post_id( string $post_type ): int {
-		if ( ! post_type_exists( $post_type ) ) {
-			return 0;
-		}
-
-		$posts = get_posts(
-			array(
-				'post_type'   => $post_type,
-				'numberposts' => 1,
-				'fields'      => 'ids',
-			)
-		);
-
-		return ! empty( $posts ) ? (int) $posts[0] : 0;
 	}
 
 	private function cache( string $key, callable $callback, int $ttl ): array {

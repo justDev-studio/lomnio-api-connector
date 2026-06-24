@@ -68,9 +68,9 @@ This page controls the universal Lomnio frontend layer:
 - phase-aware routes;
 - theme templates used for floor and unit pages;
 - Inertia component names;
-- settings/content source posts;
+- Floor Page and Unit Page settings custom post types;
 - flats home page used by breadcrumbs;
-- ACF cache TTL and unit dark-header behavior.
+- ACF cache TTL.
 
 Theme templates should use the global facade:
 
