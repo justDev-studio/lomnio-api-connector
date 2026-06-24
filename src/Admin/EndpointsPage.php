@@ -7,6 +7,10 @@
 
 namespace LomnioApiConnector\Admin;
 
+use LomnioApiConnector\Database\FloorRepository;
+use LomnioApiConnector\Database\ProjectRepository;
+use LomnioApiConnector\Database\UnitRepository;
+use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
 use LomnioApiConnector\Sync\UnitsSync;
 
@@ -35,9 +39,17 @@ final class EndpointsPage {
 	 */
 	private ?UnitsSync $units_sync;
 
-	public function __construct( ?ProjectSync $project_sync = null, ?UnitsSync $units_sync = null ) {
+	/**
+	 * Floors sync runner.
+	 *
+	 * @var FloorsSync|null
+	 */
+	private ?FloorsSync $floors_sync;
+
+	public function __construct( ?ProjectSync $project_sync = null, ?UnitsSync $units_sync = null, ?FloorsSync $floors_sync = null ) {
 		$this->project_sync = $project_sync;
 		$this->units_sync   = $units_sync;
+		$this->floors_sync  = $floors_sync;
 	}
 
 	/**
@@ -83,7 +95,9 @@ final class EndpointsPage {
 
 		foreach ( $this->endpoints() as $key => $endpoint ) {
 			$endpoint_settings = isset( $submitted[ $key ] ) && is_array( $submitted[ $key ] ) ? $submitted[ $key ] : array();
-			$schedule          = isset( $endpoint_settings['schedule'] ) ? sanitize_key( (string) $endpoint_settings['schedule'] ) : $endpoint['default_schedule'];
+			$schedule          = ! empty( $endpoint['has_schedule'] ) && isset( $endpoint_settings['schedule'] )
+				? sanitize_key( (string) $endpoint_settings['schedule'] )
+				: $endpoint['default_schedule'];
 
 			if ( ! isset( $schedules[ $schedule ] ) ) {
 				$schedule = $endpoint['default_schedule'];
@@ -93,6 +107,24 @@ final class EndpointsPage {
 				'active'   => ! empty( $endpoint_settings['active'] ),
 				'schedule' => $schedule,
 			);
+
+			if ( ! empty( $endpoint['env_controls'] ) ) {
+				$submitted_envs = isset( $endpoint_settings['allowed_envs'] ) && is_array( $endpoint_settings['allowed_envs'] )
+					? array_map( 'sanitize_key', $endpoint_settings['allowed_envs'] )
+					: array();
+				$valid_envs     = array_keys( $this->allowed_environments() );
+				$allowed_envs   = array_values( array_intersect( $submitted_envs, $valid_envs ) );
+
+				if ( in_array( 'all', $allowed_envs, true ) ) {
+					$allowed_envs = array( 'all' );
+				}
+
+				if ( empty( $allowed_envs ) ) {
+					$allowed_envs = $endpoint['default_allowed_envs'];
+				}
+
+				$settings[ $key ]['allowed_envs'] = $allowed_envs;
+			}
 		}
 
 		update_option( self::OPTION_NAME, $settings, false );
@@ -116,8 +148,13 @@ final class EndpointsPage {
 		$endpoints = $this->endpoints();
 
 		if ( 'all' === $target ) {
-			$targets = array_keys( $endpoints );
-		} elseif ( isset( $endpoints[ $target ] ) ) {
+			$targets = array_keys(
+				array_filter(
+					$endpoints,
+					static fn( array $endpoint ): bool => ! empty( $endpoint['syncable'] )
+				)
+			);
+		} elseif ( isset( $endpoints[ $target ] ) && ! empty( $endpoints[ $target ]['syncable'] ) ) {
 			$targets = array( $target );
 		} else {
 			wp_safe_redirect( add_query_arg( 'lomnio_endpoints_status', 'invalid_sync', $this->page_url() ) );
@@ -139,6 +176,16 @@ final class EndpointsPage {
 
 			if ( 'units' === $endpoint_key && null !== $this->units_sync ) {
 				$result = $this->units_sync->run();
+
+				if ( is_wp_error( $result ) ) {
+					$has_error = true;
+				}
+
+				continue;
+			}
+
+			if ( 'floors' === $endpoint_key && null !== $this->floors_sync ) {
+				$result = $this->floors_sync->run();
 
 				if ( is_wp_error( $result ) ) {
 					$has_error = true;
@@ -186,6 +233,9 @@ final class EndpointsPage {
 						<?php echo esc_html__( 'Sync All', 'lomnio-api-connector' ); ?>
 					</button>
 					<?php foreach ( $this->endpoints() as $key => $endpoint ) : ?>
+						<?php if ( empty( $endpoint['syncable'] ) ) : ?>
+							<?php continue; ?>
+						<?php endif; ?>
 						<button class="button" name="lomnio_sync_target" value="<?php echo esc_attr( $key ); ?>">
 							<?php
 							printf(
@@ -210,9 +260,10 @@ final class EndpointsPage {
 							<th scope="col"><?php echo esc_html__( 'Path', 'lomnio-api-connector' ); ?></th>
 							<th scope="col"><?php echo esc_html__( 'Schedule', 'lomnio-api-connector' ); ?></th>
 							<th scope="col"><?php echo esc_html__( 'Active', 'lomnio-api-connector' ); ?></th>
+							<th scope="col"><?php echo esc_html__( 'Allowed WP_ENV', 'lomnio-api-connector' ); ?></th>
 							<th scope="col"><?php echo esc_html__( 'Status', 'lomnio-api-connector' ); ?></th>
 							<th scope="col"><?php echo esc_html__( 'Message', 'lomnio-api-connector' ); ?></th>
-							<th scope="col"><?php echo esc_html__( 'Fetched At', 'lomnio-api-connector' ); ?></th>
+							<th scope="col"><?php echo esc_html__( 'Fetched / Used At', 'lomnio-api-connector' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -223,6 +274,25 @@ final class EndpointsPage {
 							$field_name        = 'lomnio_endpoints[' . esc_attr( $key ) . ']';
 							?>
 							<tr>
+								<td>
+									<strong><?php echo esc_html( $endpoint['label'] ); ?></strong>
+									<p class="description"><?php echo esc_html( $endpoint['description'] ); ?></p>
+								</td>
+								<td><code><?php echo esc_html( $endpoint['method'] ); ?></code></td>
+								<td><code><?php echo esc_html( $endpoint['path'] ); ?></code></td>
+								<td>
+									<?php if ( ! empty( $endpoint['has_schedule'] ) ) : ?>
+										<select name="<?php echo esc_attr( $field_name ); ?>[schedule]">
+											<?php foreach ( $this->schedules() as $schedule_key => $schedule ) : ?>
+												<option value="<?php echo esc_attr( $schedule_key ); ?>" <?php selected( $endpoint_settings['schedule'], $schedule_key ); ?>>
+													<?php echo esc_html( $schedule['label'] ); ?>
+												</option>
+											<?php endforeach; ?>
+										</select>
+									<?php else : ?>
+										&mdash;
+									<?php endif; ?>
+								</td>
 								<td>
 									<label>
 										<input
@@ -235,21 +305,24 @@ final class EndpointsPage {
 									</label>
 								</td>
 								<td>
-									<strong><?php echo esc_html( $endpoint['label'] ); ?></strong>
-									<p class="description"><?php echo esc_html( $endpoint['description'] ); ?></p>
+									<?php if ( ! empty( $endpoint['env_controls'] ) ) : ?>
+										<fieldset>
+											<?php foreach ( $this->allowed_environments() as $env_key => $env_label ) : ?>
+												<label style="display:block;margin-bottom:4px;">
+													<input
+														type="checkbox"
+														name="<?php echo esc_attr( $field_name ); ?>[allowed_envs][]"
+														value="<?php echo esc_attr( $env_key ); ?>"
+														<?php checked( in_array( $env_key, $endpoint_settings['allowed_envs'], true ) ); ?>
+													>
+													<?php echo esc_html( $env_label ); ?>
+												</label>
+											<?php endforeach; ?>
+										</fieldset>
+									<?php else : ?>
+										&mdash;
+									<?php endif; ?>
 								</td>
-								<td><code><?php echo esc_html( $endpoint['method'] ); ?></code></td>
-								<td><code><?php echo esc_html( $endpoint['path'] ); ?></code></td>
-								<td>
-									<select name="<?php echo esc_attr( $field_name ); ?>[schedule]">
-										<?php foreach ( $this->schedules() as $schedule_key => $schedule ) : ?>
-											<option value="<?php echo esc_attr( $schedule_key ); ?>" <?php selected( $endpoint_settings['schedule'], $schedule_key ); ?>>
-												<?php echo esc_html( $schedule['label'] ); ?>
-											</option>
-										<?php endforeach; ?>
-									</select>
-								</td>
-								
 								<td><?php echo esc_html( $this->status_label( $endpoint_meta ) ); ?></td>
 								<td><?php echo esc_html( $endpoint_meta['message'] ); ?></td>
 								<td><?php echo esc_html( $endpoint_meta['fetched_at'] ); ?></td>
@@ -322,6 +395,17 @@ final class EndpointsPage {
 			if ( ! isset( $this->schedules()[ $settings[ $key ]['schedule'] ] ) ) {
 				$settings[ $key ]['schedule'] = $endpoint['default_schedule'];
 			}
+
+			if ( ! empty( $endpoint['env_controls'] ) ) {
+				$allowed_envs = isset( $item['allowed_envs'] ) && is_array( $item['allowed_envs'] )
+					? array_map( 'sanitize_key', $item['allowed_envs'] )
+					: $endpoint['default_allowed_envs'];
+				$allowed_envs = array_values( array_intersect( $allowed_envs, array_keys( $this->allowed_environments() ) ) );
+
+				$settings[ $key ]['allowed_envs'] = ! empty( $allowed_envs ) ? $allowed_envs : $endpoint['default_allowed_envs'];
+			} else {
+				$settings[ $key ]['allowed_envs'] = array();
+			}
 		}
 
 		return $settings;
@@ -348,9 +432,47 @@ final class EndpointsPage {
 				'message'    => ! empty( $item['message'] ) ? (string) $item['message'] : '—',
 				'fetched_at' => ! empty( $item['fetched_at'] ) ? (string) $item['fetched_at'] : '—',
 			);
+
+			if ( ! $this->endpoint_table_exists( $key ) ) {
+				$meta[ $key ] = array(
+					'status'     => __( 'Missing DB', 'lomnio-api-connector' ),
+					'success'    => false,
+					'message'    => sprintf(
+						/* translators: %s: endpoint label. */
+						__( '%s database table is missing. Run sync to recreate it.', 'lomnio-api-connector' ),
+						$endpoint['label']
+					),
+					'fetched_at' => '—',
+				);
+			}
 		}
 
 		return $meta;
+	}
+
+	/**
+	 * Check whether an endpoint local table exists.
+	 */
+	private function endpoint_table_exists( string $endpoint_key ): bool {
+		$endpoints = $this->endpoints();
+
+		if ( isset( $endpoints[ $endpoint_key ] ) && empty( $endpoints[ $endpoint_key ]['has_table'] ) ) {
+			return true;
+		}
+
+		if ( 'project' === $endpoint_key ) {
+			return ( new ProjectRepository() )->table_exists();
+		}
+
+		if ( 'units' === $endpoint_key ) {
+			return ( new UnitRepository() )->table_exists();
+		}
+
+		if ( 'floors' === $endpoint_key ) {
+			return ( new FloorRepository() )->table_exists();
+		}
+
+		return true;
 	}
 
 	/**
@@ -403,6 +525,10 @@ final class EndpointsPage {
 				'method'           => 'GET',
 				'path'             => '/v1/project',
 				'default_schedule' => 'daily',
+				'has_schedule'     => true,
+				'syncable'         => true,
+				'has_table'        => true,
+				'env_controls'     => false,
 			),
 			'units'   => array(
 				'label'            => 'Units',
@@ -410,7 +536,47 @@ final class EndpointsPage {
 				'method'           => 'GET',
 				'path'             => '/v1/units',
 				'default_schedule' => 'every_ten_minutes',
+				'has_schedule'     => true,
+				'syncable'         => true,
+				'has_table'        => true,
+				'env_controls'     => false,
 			),
+			'floors'  => array(
+				'label'            => 'Floors',
+				'description'      => __( 'List floors.', 'lomnio-api-connector' ),
+				'method'           => 'GET',
+				'path'             => '/v1/floors',
+				'default_schedule' => 'every_ten_minutes',
+				'has_schedule'     => true,
+				'syncable'         => true,
+				'has_table'        => true,
+				'env_controls'     => false,
+			),
+			'leads'   => array(
+				'label'                => 'Leads',
+				'description'          => __( 'Send leads from forms.', 'lomnio-api-connector' ),
+				'method'               => 'POST',
+				'path'                 => '/v1/leads',
+				'default_schedule'     => 'manual',
+				'default_allowed_envs' => array( 'production' ),
+				'has_schedule'         => false,
+				'syncable'             => false,
+				'has_table'            => false,
+				'env_controls'         => true,
+			),
+		);
+	}
+
+	/**
+	 * WP_ENV values available for lead sending.
+	 */
+	private function allowed_environments(): array {
+		return array(
+			'all'         => __( 'All environments', 'lomnio-api-connector' ),
+			'local'       => 'local',
+			'development' => 'development',
+			'staging'     => 'staging',
+			'production'  => 'production',
 		);
 	}
 

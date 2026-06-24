@@ -9,9 +9,11 @@ namespace LomnioApiConnector;
 
 use LomnioApiConnector\Admin\EndpointsPage;
 use LomnioApiConnector\Admin\SettingsPage;
+use LomnioApiConnector\Database\FloorRepository;
 use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Security\SecretStorage;
+use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
 use LomnioApiConnector\Sync\UnitsSync;
 
@@ -66,9 +68,11 @@ final class Plugin {
 		$project_sync->hooks();
 		$units_sync = new UnitsSync( $this->secret_storage(), new UnitRepository() );
 		$units_sync->hooks();
+		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
+		$floors_sync->hooks();
 
 		if ( is_admin() ) {
-			$endpoints_page = new EndpointsPage( $project_sync, $units_sync );
+			$endpoints_page = new EndpointsPage( $project_sync, $units_sync, $floors_sync );
 			$endpoints_page->hooks();
 
 			$settings_page = new SettingsPage( $this->secret_storage() );
@@ -85,6 +89,9 @@ final class Plugin {
 
 		$units_sync = new UnitsSync( $this->secret_storage(), new UnitRepository() );
 		$units_sync->activate();
+
+		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
+		$floors_sync->activate();
 	}
 
 	/**
@@ -96,6 +103,9 @@ final class Plugin {
 
 		$units_sync = new UnitsSync( $this->secret_storage(), new UnitRepository() );
 		$units_sync->deactivate();
+
+		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
+		$floors_sync->deactivate();
 	}
 
 	/**

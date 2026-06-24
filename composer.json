@@ -12,12 +12,18 @@
     ],
     "require": {
         "php": ">=7.4",
-        "woocommerce/action-scheduler": "^3.8"
+        "woocommerce/action-scheduler": "^4.0"
     },
     "autoload": {
         "psr-4": {
             "LomnioApiConnector\\": "src/"
-        }
+        },
+        "files": [
+            "includes/LomnioProject.php",
+            "includes/LomnioUnits.php",
+            "includes/LomnioFloors.php",
+            "includes/LomnioLeads.php"
+        ]
     },
     "config": {
         "optimize-autoloader": true,

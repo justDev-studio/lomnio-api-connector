@@ -26,11 +26,22 @@ define( 'LOMNIO_API_CONNECTOR_PLUGIN_FILE', __FILE__ );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-$lomnio_api_connector_autoload = LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'vendor/autoload.php';
+$lomnio_api_connector_autoload_candidates = array(
+	LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'vendor/autoload.php',
+	dirname( LOMNIO_API_CONNECTOR_PLUGIN_PATH, 3 ) . '/vendor/autoload.php',
+);
 
-if ( file_exists( $lomnio_api_connector_autoload ) ) {
-	require_once $lomnio_api_connector_autoload;
-} else {
+$lomnio_api_connector_autoload_loaded = false;
+
+foreach ( $lomnio_api_connector_autoload_candidates as $lomnio_api_connector_autoload ) {
+	if ( file_exists( $lomnio_api_connector_autoload ) ) {
+		require_once $lomnio_api_connector_autoload;
+		$lomnio_api_connector_autoload_loaded = true;
+		break;
+	}
+}
+
+if ( ! $lomnio_api_connector_autoload_loaded ) {
 	spl_autoload_register(
 		static function ( string $class ): void {
 			$prefix   = 'LomnioApiConnector\\';
@@ -51,10 +62,31 @@ if ( file_exists( $lomnio_api_connector_autoload ) ) {
 	);
 }
 
-$lomnio_api_connector_action_scheduler = LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
+$lomnio_api_connector_facades = array(
+	'LomnioProject' => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioProject.php',
+	'LomnioUnits'   => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioUnits.php',
+	'LomnioFloors'  => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioFloors.php',
+	'LomnioLeads'   => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioLeads.php',
+);
 
-if ( file_exists( $lomnio_api_connector_action_scheduler ) ) {
-	require_once $lomnio_api_connector_action_scheduler;
+foreach ( $lomnio_api_connector_facades as $lomnio_api_connector_facade_class => $lomnio_api_connector_facade_file ) {
+	if ( ! class_exists( $lomnio_api_connector_facade_class ) && file_exists( $lomnio_api_connector_facade_file ) ) {
+		require_once $lomnio_api_connector_facade_file;
+	}
+}
+
+$lomnio_api_connector_action_scheduler_candidates = array(
+	LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php',
+	dirname( LOMNIO_API_CONNECTOR_PLUGIN_PATH, 3 ) . '/vendor/woocommerce/action-scheduler/action-scheduler.php',
+);
+
+if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
+	foreach ( array_unique( $lomnio_api_connector_action_scheduler_candidates ) as $lomnio_api_connector_action_scheduler ) {
+		if ( file_exists( $lomnio_api_connector_action_scheduler ) ) {
+			require_once $lomnio_api_connector_action_scheduler;
+			break;
+		}
+	}
 }
 
 add_action(

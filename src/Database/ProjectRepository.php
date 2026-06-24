@@ -19,7 +19,7 @@ final class ProjectRepository {
 	 * Ensure project table exists.
 	 */
 	public function ensure_table(): void {
-		if ( self::SCHEMA_VERSION === get_option( self::OPTION_SCHEMA ) ) {
+		if ( self::SCHEMA_VERSION === get_option( self::OPTION_SCHEMA ) && $this->table_exists() ) {
 			return;
 		}
 
@@ -44,6 +44,22 @@ final class ProjectRepository {
 
 		dbDelta( $sql );
 		update_option( self::OPTION_SCHEMA, self::SCHEMA_VERSION, false );
+	}
+
+	/**
+	 * Check whether the project table exists.
+	 */
+	public function table_exists(): bool {
+		global $wpdb;
+
+		$table = $this->table_name();
+
+		return $table === $wpdb->get_var(
+			$wpdb->prepare(
+				'SHOW TABLES LIKE %s',
+				$wpdb->esc_like( $table )
+			)
+		);
 	}
 
 	/**
@@ -162,6 +178,23 @@ final class ProjectRepository {
 		}
 
 		return json_decode( wp_json_encode( $project ) ?: '{}' ) ?: (object) array();
+	}
+
+	/**
+	 * Get the latest stored project ID.
+	 */
+	public function get_project_id(): ?int {
+		$this->ensure_table();
+
+		global $wpdb;
+
+		$project_id = $wpdb->get_var( "SELECT project_id FROM {$this->table_name()} ORDER BY fetched_at DESC LIMIT 1" );
+
+		if ( ! is_numeric( $project_id ) ) {
+			return null;
+		}
+
+		return (int) $project_id;
 	}
 
 	/**
