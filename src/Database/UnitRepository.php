@@ -7,6 +7,8 @@
 
 namespace LomnioApiConnector\Database;
 
+use LomnioApiConnector\Pages\PageContext;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -378,6 +380,8 @@ final class UnitRepository {
 	 * Convert a stored row to a template object.
 	 */
 	private function row_to_unit_object( array $row ): ?object {
+		static $page_context = null;
+
 		$json = ! empty( $row['payload_json'] ) ? $row['payload_json'] : '';
 
 		if ( ! is_string( $json ) || '' === $json ) {
@@ -391,7 +395,17 @@ final class UnitRepository {
 		}
 
 		if ( isset( $payload->data ) && $payload->data instanceof \stdClass ) {
-			return $payload->data;
+			$payload = $payload->data;
+		}
+
+		$payload->url = null;
+
+		if ( isset( $payload->code ) && is_scalar( $payload->code ) && '' !== (string) $payload->code ) {
+			if ( ! $page_context instanceof PageContext ) {
+				$page_context = new PageContext();
+			}
+
+			$payload->url = $page_context->unit_link( (string) $payload->code, null );
 		}
 
 		return $payload;

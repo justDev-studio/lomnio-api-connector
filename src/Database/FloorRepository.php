@@ -7,6 +7,8 @@
 
 namespace LomnioApiConnector\Database;
 
+use LomnioApiConnector\Pages\PageContext;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -288,6 +290,8 @@ final class FloorRepository {
 	 * Convert a stored row to a template object.
 	 */
 	private function row_to_floor_object( array $row ): ?object {
+		static $page_context = null;
+
 		$json = $row['payload_json'] ?? '';
 
 		if ( ! is_string( $json ) || '' === $json ) {
@@ -301,7 +305,21 @@ final class FloorRepository {
 		}
 
 		if ( isset( $payload->data ) && $payload->data instanceof \stdClass ) {
-			return $payload->data;
+			$payload = $payload->data;
+		}
+
+		$payload->url = null;
+
+		if (
+			isset( $payload->availability, $payload->number ) &&
+			'available' === (string) $payload->availability &&
+			is_scalar( $payload->number )
+		) {
+			if ( ! $page_context instanceof PageContext ) {
+				$page_context = new PageContext();
+			}
+
+			$payload->url = $page_context->floor_link( null, (int) $payload->number );
 		}
 
 		return $payload;

@@ -57,6 +57,7 @@ final class EndpointsPage {
 	 */
 	public function hooks(): void {
 		add_action( 'admin_menu', array( $this, 'register_page' ) );
+		add_action( 'admin_menu', array( $this, 'normalize_submenu' ), 100 );
 		add_action( 'admin_post_' . self::ACTION_SAVE, array( $this, 'handle_save' ) );
 		add_action( 'admin_post_' . self::ACTION_SYNC, array( $this, 'handle_sync' ) );
 	}
@@ -74,6 +75,50 @@ final class EndpointsPage {
 			'dashicons-rest-api',
 			58
 		);
+	}
+
+	/**
+	 * Keep the endpoints table visible as the first submenu item.
+	 */
+	public function normalize_submenu(): void {
+		global $submenu;
+
+		if ( ! isset( $submenu[ self::PAGE_SLUG ] ) || ! is_array( $submenu[ self::PAGE_SLUG ] ) ) {
+			$submenu[ self::PAGE_SLUG ] = array();
+		}
+
+		$submenu_item = array(
+			__( 'Endpoints', 'lomnio-api-connector' ),
+			$this->capability(),
+			self::PAGE_SLUG,
+			__( 'Lomnio API', 'lomnio-api-connector' ),
+		);
+
+		$filtered = array();
+		$found    = false;
+
+		foreach ( $submenu[ self::PAGE_SLUG ] as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			if ( isset( $item[2] ) && self::PAGE_SLUG === $item[2] ) {
+				if ( ! $found ) {
+					$filtered[] = $submenu_item;
+					$found      = true;
+				}
+
+				continue;
+			}
+
+			$filtered[] = $item;
+		}
+
+		if ( ! $found ) {
+			array_unshift( $filtered, $submenu_item );
+		}
+
+		$submenu[ self::PAGE_SLUG ] = array_values( $filtered );
 	}
 
 	/**

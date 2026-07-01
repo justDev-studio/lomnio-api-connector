@@ -64,6 +64,7 @@ Frontend page display settings:
 
 This page controls the universal Lomnio frontend layer:
 
+- `Enable Lomnio pages` turns the whole layer on or off;
 - floor and unit route slugs;
 - phase-aware routes;
 - theme templates used for floor and unit pages;
@@ -72,16 +73,39 @@ This page controls the universal Lomnio frontend layer:
 - flats home page used by breadcrumbs;
 - ACF cache TTL.
 
+When `Enable Lomnio pages` is disabled, the plugin does not register rewrite rules, does not register route query vars, and does not route requests to theme templates.
+
+Settings content is managed through two custom post types created by the plugin:
+
+- `floor_settings`
+- `single_settings`
+
+Each post type allows one settings page per language. WPML translations are supported and should be used for localized content.
+
 Theme templates should use the global facade:
 
 ```php
+$settings = \LomnioPages::settings();
+
+$floor_slug = $settings['floor_slug'];
+$unit_slug = $settings['unit_slug'];
+$phase_query_var = $settings['phase_query_var'];
+
 $floor = \LomnioPages::floor_number();
-$unit_id = \LomnioPages::unit_id();
+$unit_code = \LomnioPages::unit_id();
 $phase = \LomnioPages::phase();
 
-$floor_url = \LomnioPages::floor_link( $phase, $floor );
-$unit_url = \LomnioPages::unit_link( $unit_id, $phase );
-$fields = \LomnioPages::fields( 'floor' );
+$floor_base_url = \LomnioPages::floor_base();
+$phase_floor_base_url = \LomnioPages::floor_base( $phase );
+$floor_url = \LomnioPages::floor_link( null, $floor );
+$unit_url = \LomnioPages::unit_link( $unit_code );
+
+$floor_fields = \LomnioPages::fields( 'floor' );
+$unit_fields = \LomnioPages::fields( 'unit' );
+
+$floor_component = \LomnioPages::component( 'floor' );
+$unit_component = \LomnioPages::component( 'unit' );
+$not_found_component = \LomnioPages::not_found_component();
 ```
 
 Hidden API token settings page:
@@ -227,6 +251,19 @@ These are indexed local relation columns, not database-level foreign key constra
 
 Use global Lomnio classes in theme code. Do not instantiate repository classes directly unless you need low-level plugin internals.
 
+Frontend routing and display helpers:
+
+```php
+$settings = \LomnioPages::settings();
+
+$floor_slug = $settings['floor_slug'];
+$unit_slug = $settings['unit_slug'];
+$phase_query_var = $settings['phase_query_var'];
+
+$section['floor_link'] = \LomnioPages::floor_base();
+$section['phase_floor_link'] = \LomnioPages::floor_base( \LomnioPages::phase() );
+```
+
 Project as object:
 
 ```php
@@ -250,6 +287,8 @@ Units list:
 ```php
 $section['units'] = \LomnioUnits::get();
 ```
+
+Each unit object contains `url` built from the unit `code` and without a phase/project segment.
 
 Units with filters:
 
@@ -285,6 +324,8 @@ Floors list:
 ```php
 $section['floors'] = \LomnioFloors::get();
 ```
+
+Available floors contain `url` built only from the floor number. Unavailable floors return `url => null`.
 
 Floors with filters:
 
