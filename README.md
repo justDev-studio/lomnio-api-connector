@@ -154,6 +154,16 @@ Default schedules:
 
 Available schedules include 5 minutes, 10 minutes, 30 minutes, hourly, twice daily, and daily.
 
+## External Sync Webhook
+
+The standard WordPress REST API webhook queues Project, Units, and Floors synchronization:
+
+```text
+POST https://site.com/wp-json/lomnio/v1/webhook
+```
+
+The webhook does not require authorization. A successful request returns HTTP `202` with the queued Action Scheduler action IDs.
+
 ## Leads
 
 Leads are sent through:

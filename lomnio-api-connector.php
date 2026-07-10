@@ -67,6 +67,7 @@ $lomnio_api_connector_facades = array(
 	'LomnioUnits'   => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioUnits.php',
 	'LomnioFloors'  => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioFloors.php',
 	'LomnioPages'   => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioPages.php',
+	'LomnioMedia'   => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioMedia.php',
 	'LomnioLeads'   => LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'includes/LomnioLeads.php',
 );
 

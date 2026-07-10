@@ -23,6 +23,7 @@
             "includes/LomnioUnits.php",
             "includes/LomnioFloors.php",
             "includes/LomnioPages.php",
+            "includes/LomnioMedia.php",
             "includes/LomnioLeads.php"
         ]
     },

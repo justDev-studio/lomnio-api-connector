@@ -13,6 +13,7 @@ use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
 use LomnioApiConnector\Sync\UnitsSync;
+use LomnioApiConnector\Webhook\SyncWebhook;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -46,10 +47,18 @@ final class EndpointsPage {
 	 */
 	private ?FloorsSync $floors_sync;
 
-	public function __construct( ?ProjectSync $project_sync = null, ?UnitsSync $units_sync = null, ?FloorsSync $floors_sync = null ) {
+	/**
+	 * External synchronization webhook.
+	 *
+	 * @var SyncWebhook|null
+	 */
+	private ?SyncWebhook $sync_webhook;
+
+	public function __construct( ?ProjectSync $project_sync = null, ?UnitsSync $units_sync = null, ?FloorsSync $floors_sync = null, ?SyncWebhook $sync_webhook = null ) {
 		$this->project_sync = $project_sync;
 		$this->units_sync   = $units_sync;
 		$this->floors_sync  = $floors_sync;
+		$this->sync_webhook = $sync_webhook;
 	}
 
 	/**
@@ -268,6 +277,19 @@ final class EndpointsPage {
 					<?php echo esc_html__( 'API token settings', 'lomnio-api-connector' ); ?>
 				</a>
 			</p>
+
+			<?php if ( null !== $this->sync_webhook ) : ?>
+				<h2><?php echo esc_html__( 'External sync webhook', 'lomnio-api-connector' ); ?></h2>
+				<p><?php echo esc_html__( 'Send a POST request without authorization to queue Project, Units, and Floors synchronization.', 'lomnio-api-connector' ); ?></p>
+				<table class="widefat striped" style="max-width: 920px; margin-bottom: 24px;">
+					<tbody>
+						<tr>
+							<th scope="row"><?php echo esc_html__( 'URL', 'lomnio-api-connector' ); ?></th>
+							<td><code><?php echo esc_html( $this->sync_webhook->url() ); ?></code></td>
+						</tr>
+					</tbody>
+				</table>
+			<?php endif; ?>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_SYNC ); ?>">

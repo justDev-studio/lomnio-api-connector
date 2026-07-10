@@ -13,6 +13,7 @@ use LomnioApiConnector\Admin\SettingsPage;
 use LomnioApiConnector\Database\FloorRepository;
 use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Database\UnitRepository;
+use LomnioApiConnector\Media\ImageProxy;
 use LomnioApiConnector\Pages\PageRouter;
 use LomnioApiConnector\Pages\PageSettings;
 use LomnioApiConnector\Pages\PageSettingsPostTypes;
@@ -20,6 +21,7 @@ use LomnioApiConnector\Security\SecretStorage;
 use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
 use LomnioApiConnector\Sync\UnitsSync;
+use LomnioApiConnector\Webhook\SyncWebhook;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -74,6 +76,10 @@ final class Plugin {
 		$units_sync->hooks();
 		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
 		$floors_sync->hooks();
+		$sync_webhook = new SyncWebhook();
+		$sync_webhook->hooks();
+		$image_proxy = new ImageProxy();
+		$image_proxy->hooks();
 		$page_settings = new PageSettings();
 		$page_settings_post_types = new PageSettingsPostTypes();
 		$page_settings_post_types->hooks();
@@ -81,7 +87,7 @@ final class Plugin {
 		$page_router->hooks();
 
 		if ( is_admin() ) {
-			$endpoints_page = new EndpointsPage( $project_sync, $units_sync, $floors_sync );
+			$endpoints_page = new EndpointsPage( $project_sync, $units_sync, $floors_sync, $sync_webhook );
 			$endpoints_page->hooks();
 
 			$settings_page = new SettingsPage( $this->secret_storage() );
