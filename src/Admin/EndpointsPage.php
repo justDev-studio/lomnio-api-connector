@@ -23,6 +23,7 @@ final class EndpointsPage {
 	private const PAGE_SLUG   = 'lomnio-api-endpoints';
 	private const ACTION_SAVE = 'lomnio_api_connector_save_endpoints';
 	private const ACTION_SYNC = 'lomnio_api_connector_sync_endpoint';
+	private const ACTION_CLEAR_WEBHOOK_DEBUG = 'lomnio_api_connector_clear_webhook_debug';
 	private const OPTION_NAME = 'lomnio_api_connector_endpoint_settings';
 	private const OPTION_META = 'lomnio_api_connector_endpoint_meta';
 
@@ -50,15 +51,15 @@ final class EndpointsPage {
 	/**
 	 * External synchronization webhook.
 	 *
-	 * @var SyncWebhook|null
+	 * @var SyncWebhook
 	 */
-	private ?SyncWebhook $sync_webhook;
+	private SyncWebhook $sync_webhook;
 
 	public function __construct( ?ProjectSync $project_sync = null, ?UnitsSync $units_sync = null, ?FloorsSync $floors_sync = null, ?SyncWebhook $sync_webhook = null ) {
 		$this->project_sync = $project_sync;
 		$this->units_sync   = $units_sync;
 		$this->floors_sync  = $floors_sync;
-		$this->sync_webhook = $sync_webhook;
+		$this->sync_webhook = $sync_webhook ?? new SyncWebhook();
 	}
 
 	/**
@@ -69,6 +70,7 @@ final class EndpointsPage {
 		add_action( 'admin_menu', array( $this, 'normalize_submenu' ), 100 );
 		add_action( 'admin_post_' . self::ACTION_SAVE, array( $this, 'handle_save' ) );
 		add_action( 'admin_post_' . self::ACTION_SYNC, array( $this, 'handle_sync' ) );
+		add_action( 'admin_post_' . self::ACTION_CLEAR_WEBHOOK_DEBUG, array( $this, 'handle_clear_webhook_debug' ) );
 	}
 
 	/**
@@ -256,6 +258,22 @@ final class EndpointsPage {
 	}
 
 	/**
+	 * Clear the temporarily saved webhook request.
+	 */
+	public function handle_clear_webhook_debug(): void {
+		if ( ! current_user_can( $this->capability() ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'lomnio-api-connector' ) );
+		}
+
+		check_admin_referer( self::ACTION_CLEAR_WEBHOOK_DEBUG );
+
+		$this->sync_webhook->clear_debug_request();
+
+		wp_safe_redirect( add_query_arg( 'lomnio_endpoints_status', 'webhook_debug_cleared', $this->page_url() ) );
+		exit;
+	}
+
+	/**
 	 * Render admin page.
 	 */
 	public function render(): void {
@@ -278,18 +296,18 @@ final class EndpointsPage {
 				</a>
 			</p>
 
-			<?php if ( null !== $this->sync_webhook ) : ?>
-				<h2><?php echo esc_html__( 'External sync webhook', 'lomnio-api-connector' ); ?></h2>
-				<p><?php echo esc_html__( 'Send a POST request without authorization to queue Project, Units, and Floors synchronization.', 'lomnio-api-connector' ); ?></p>
-				<table class="widefat striped" style="max-width: 920px; margin-bottom: 24px;">
-					<tbody>
-						<tr>
-							<th scope="row"><?php echo esc_html__( 'URL', 'lomnio-api-connector' ); ?></th>
-							<td><code><?php echo esc_html( $this->sync_webhook->url() ); ?></code></td>
-						</tr>
-					</tbody>
-				</table>
-			<?php endif; ?>
+			<h2><?php echo esc_html__( 'External sync webhook', 'lomnio-api-connector' ); ?></h2>
+			<p><?php echo esc_html__( 'Send a POST request without authorization. Supported events are applied directly without a full synchronization.', 'lomnio-api-connector' ); ?></p>
+			<table class="widefat striped" style="max-width: 920px; margin-bottom: 24px;">
+				<tbody>
+					<tr>
+						<th scope="row"><?php echo esc_html__( 'URL', 'lomnio-api-connector' ); ?></th>
+						<td><code><?php echo esc_html( $this->sync_webhook->url() ); ?></code></td>
+					</tr>
+				</tbody>
+			</table>
+
+			<?php $this->render_webhook_debug(); ?>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_SYNC ); ?>">
@@ -425,7 +443,79 @@ final class EndpointsPage {
 
 		if ( 'invalid_sync' === $status ) {
 			$this->notice( __( 'Invalid sync target.', 'lomnio-api-connector' ), 'error' );
+			return;
 		}
+
+		if ( 'webhook_debug_cleared' === $status ) {
+			$this->notice( __( 'Saved webhook debug request cleared.', 'lomnio-api-connector' ), 'success' );
+		}
+	}
+
+	/**
+	 * Render the last webhook request for temporary debugging.
+	 */
+	private function render_webhook_debug(): void {
+		$debug = $this->sync_webhook->debug_request();
+		?>
+		<h3><?php echo esc_html__( 'Temporary webhook debug', 'lomnio-api-connector' ); ?></h3>
+		<?php if ( empty( $debug ) ) : ?>
+			<p><?php echo esc_html__( 'No webhook request has been received yet.', 'lomnio-api-connector' ); ?></p>
+			<?php return; ?>
+		<?php endif; ?>
+
+		<p>
+			<?php
+			printf(
+				esc_html__( 'Last request received at %1$s. Method: %2$s. Route: %3$s.', 'lomnio-api-connector' ),
+				esc_html( (string) ( $debug['received_at'] ?? '' ) ),
+				esc_html( (string) ( $debug['method'] ?? '' ) ),
+				esc_html( (string) ( $debug['route'] ?? '' ) )
+			);
+			?>
+		</p>
+		<?php if ( ! empty( $debug['truncated'] ) ) : ?>
+			<p class="notice notice-warning inline"><?php echo esc_html__( 'Raw body was truncated to 1 MB.', 'lomnio-api-connector' ); ?></p>
+		<?php endif; ?>
+
+		<details open style="max-width: 920px; margin-bottom: 12px;">
+			<summary><strong><?php echo esc_html__( 'All parsed parameters', 'lomnio-api-connector' ); ?></strong></summary>
+			<pre style="white-space: pre-wrap; overflow: auto; max-height: 500px;"><?php echo esc_html( $this->format_debug_value( $debug['all_params'] ?? array() ) ); ?></pre>
+		</details>
+		<details style="max-width: 920px; margin-bottom: 12px;">
+			<summary><strong><?php echo esc_html__( 'Raw body', 'lomnio-api-connector' ); ?></strong></summary>
+			<pre style="white-space: pre-wrap; overflow: auto; max-height: 500px;"><?php echo esc_html( (string) ( $debug['raw_body'] ?? '' ) ); ?></pre>
+		</details>
+		<details style="max-width: 920px; margin-bottom: 12px;">
+			<summary><strong><?php echo esc_html__( 'Headers', 'lomnio-api-connector' ); ?></strong></summary>
+			<pre style="white-space: pre-wrap; overflow: auto; max-height: 500px;"><?php echo esc_html( $this->format_debug_value( $debug['headers'] ?? array() ) ); ?></pre>
+		</details>
+		<details style="max-width: 920px; margin-bottom: 12px;">
+			<summary><strong><?php echo esc_html__( 'Parameters by source', 'lomnio-api-connector' ); ?></strong></summary>
+			<pre style="white-space: pre-wrap; overflow: auto; max-height: 500px;"><?php echo esc_html( $this->format_debug_value( array(
+				'query'       => $debug['query'] ?? array(),
+				'body_params' => $debug['body_params'] ?? array(),
+				'json_params' => $debug['json_params'] ?? array(),
+				'file_params' => $debug['file_params'] ?? array(),
+			) ) ); ?></pre>
+		</details>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-bottom: 24px;">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_CLEAR_WEBHOOK_DEBUG ); ?>">
+			<?php wp_nonce_field( self::ACTION_CLEAR_WEBHOOK_DEBUG ); ?>
+			<?php submit_button( __( 'Clear webhook debug', 'lomnio-api-connector' ), 'secondary', 'submit', false ); ?>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Format a captured request value for readable admin output.
+	 *
+	 * @param mixed $value Captured request value.
+	 */
+	private function format_debug_value( $value ): string {
+		$json = wp_json_encode( $value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+
+		return false === $json ? print_r( $value, true ) : $json;
 	}
 
 	/**

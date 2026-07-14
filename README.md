@@ -156,13 +156,15 @@ Available schedules include 5 minutes, 10 minutes, 30 minutes, hourly, twice dai
 
 ## External Sync Webhook
 
-The standard WordPress REST API webhook queues Project, Units, and Floors synchronization:
+The standard WordPress REST API webhook receives external Lomnio data:
 
 ```text
 POST https://site.com/wp-json/lomnio/v1/webhook
 ```
 
-The webhook does not require authorization. A successful request returns HTTP `202` with the queued Action Scheduler action IDs.
+The webhook does not require authorization during initial integration testing. `unit.*` events update only the affected unit row and only the resource groups named in `changed_fields`. For example, `changed_fields: ["status"]` updates the unit status columns and the status object in its stored JSON. A complete row is inserted when the unit does not exist locally. No full synchronization is triggered. Deleted units are excluded from frontend queries. Other event types are accepted with an `ignored` status until handlers are implemented.
+
+For temporary integration debugging, the most recently received request is shown to administrators on the Lomnio API Endpoints page. The view includes headers, raw body, JSON, form, query, and file parameters and can be cleared from the same page. Raw bodies larger than 1 MB are truncated.
 
 ## Leads
 

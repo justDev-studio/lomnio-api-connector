@@ -134,55 +134,164 @@ final class UnitRepository {
 				continue;
 			}
 
-			$payload_json = wp_json_encode( $unit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			$stored = $this->upsert_unit( $unit, $project_id, $now );
 
-			if ( ! is_string( $payload_json ) ) {
-				return new \WP_Error(
-					'lomnio_units_json_encode_failed',
-					__( 'Could not encode unit list payload for storage.', 'lomnio-api-connector' )
-				);
+			if ( is_wp_error( $stored ) ) {
+				return $stored;
 			}
 
-			$columns      = $this->columns_from_unit( $unit );
-			$unit_id      = $columns['unit_id'];
-			$payload_hash = hash( 'sha256', $payload_json );
-
-			$data = array_merge(
-				$columns,
-				array(
-					'project_id'     => $project_id,
-					'payload_hash'   => $payload_hash,
-					'payload_json'   => $payload_json,
-					'in_latest_list' => 1,
-					'fetched_at'     => $now,
-					'updated_at'     => $now,
-				)
-			);
-
-			$existing_id = (int) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT id FROM {$table} WHERE unit_id = %s LIMIT 1",
-					$unit_id
-				)
-			);
-
-			if ( $existing_id > 0 ) {
-				$result = $wpdb->update( $table, $data, array( 'id' => $existing_id ) );
-			} else {
-				$result = $wpdb->insert( $table, $data );
-			}
-
-			if ( false === $result ) {
-				return new \WP_Error(
-					'lomnio_units_database_error',
-					__( 'Could not store unit list payload in the database.', 'lomnio-api-connector' )
-				);
-			}
-
-			$stored_ids[] = $unit_id;
+			$stored_ids[] = $stored;
 		}
 
 		return $stored_ids;
+	}
+
+	/**
+	 * Store one unit received through a webhook without changing other rows.
+	 *
+	 * @return string|\WP_Error Stored unit ID.
+	 */
+	public function store_webhook_unit( array $unit, int $project_id = 0 ) {
+		if ( empty( $unit['id'] ) ) {
+			return new \WP_Error(
+				'lomnio_webhook_unit_missing_id',
+				__( 'Webhook unit payload is missing an ID.', 'lomnio-api-connector' )
+			);
+		}
+
+		$this->ensure_table();
+
+		return $this->upsert_unit(
+			$unit,
+			$project_id > 0 ? $project_id : $this->current_project_id(),
+			current_time( 'mysql' )
+		);
+	}
+
+	/**
+	 * Apply only fields declared by a unit webhook.
+	 *
+	 * A complete row is inserted when the unit does not exist locally.
+	 *
+	 * @return string|\WP_Error Stored unit ID.
+	 */
+	public function update_webhook_unit_fields( array $unit, array $changed_fields, int $project_id = 0 ) {
+		if ( empty( $unit['id'] ) ) {
+			return new \WP_Error(
+				'lomnio_webhook_unit_missing_id',
+				__( 'Webhook unit payload is missing an ID.', 'lomnio-api-connector' )
+			);
+		}
+
+		$this->ensure_table();
+
+		global $wpdb;
+
+		$unit_id = (string) $unit['id'];
+		$table   = $this->table_name();
+		$row     = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT id, payload_json FROM {$table} WHERE unit_id = %s LIMIT 1",
+				$unit_id
+			),
+			ARRAY_A
+		);
+
+		if ( ! is_array( $row ) || empty( $changed_fields ) ) {
+			return $this->store_webhook_unit( $unit, $project_id );
+		}
+
+		$stored_unit = json_decode( (string) $row['payload_json'], true );
+
+		if ( ! is_array( $stored_unit ) ) {
+			return $this->store_webhook_unit( $unit, $project_id );
+		}
+
+		$changed_groups = array();
+
+		foreach ( $changed_fields as $changed_field ) {
+			$field = trim( (string) $changed_field );
+
+			if ( '' === $field ) {
+				continue;
+			}
+
+			$group = explode( '.', $field, 2 )[0];
+
+			if ( array_key_exists( $group, $unit ) ) {
+				$stored_unit[ $group ] = $unit[ $group ];
+				$changed_groups[]      = $group;
+			}
+		}
+
+		if ( empty( $changed_groups ) ) {
+			return $unit_id;
+		}
+
+		$payload_json = wp_json_encode( $stored_unit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+
+		if ( ! is_string( $payload_json ) ) {
+			return new \WP_Error(
+				'lomnio_units_json_encode_failed',
+				__( 'Could not encode unit payload for storage.', 'lomnio-api-connector' )
+			);
+		}
+
+		$all_columns = $this->columns_from_unit( $stored_unit );
+		$column_map  = $this->webhook_field_column_map();
+		$data        = array(
+			'payload_hash'   => hash( 'sha256', $payload_json ),
+			'payload_json'   => $payload_json,
+			'in_latest_list' => 1,
+			'fetched_at'     => current_time( 'mysql' ),
+			'updated_at'     => current_time( 'mysql' ),
+		);
+
+		foreach ( array_unique( $changed_groups ) as $group ) {
+			foreach ( $column_map[ $group ] ?? array() as $column ) {
+				$data[ $column ] = $all_columns[ $column ];
+			}
+		}
+
+		if ( false === $wpdb->update( $table, $data, array( 'id' => (int) $row['id'] ) ) ) {
+			return new \WP_Error(
+				'lomnio_units_database_error',
+				__( 'Could not update unit webhook fields in the database.', 'lomnio-api-connector' )
+			);
+		}
+
+		return $unit_id;
+	}
+
+	/**
+	 * Exclude a deleted webhook unit from frontend queries.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function mark_webhook_unit_deleted( $unit_id ) {
+		$this->ensure_table();
+
+		global $wpdb;
+
+		$result = $wpdb->update(
+			$this->table_name(),
+			array(
+				'in_latest_list' => 0,
+				'updated_at'     => current_time( 'mysql' ),
+			),
+			array( 'unit_id' => (string) $unit_id ),
+			array( '%d', '%s' ),
+			array( '%s' )
+		);
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_webhook_unit_delete_failed',
+				__( 'Could not mark the webhook unit as deleted.', 'lomnio-api-connector' )
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -290,6 +399,80 @@ final class UnitRepository {
 			'floor_plan_url'               => isset( $unit['floor_plan_url'] ) ? (string) $unit['floor_plan_url'] : '',
 			'bundle_id'                    => isset( $bundle['bundle_id'] ) ? (string) $bundle['bundle_id'] : '',
 			'bundle_name'                  => isset( $bundle['bundle_name'] ) ? (string) $bundle['bundle_name'] : '',
+		);
+	}
+
+	/**
+	 * Insert or update one complete unit payload.
+	 *
+	 * @return string|\WP_Error Stored unit ID.
+	 */
+	private function upsert_unit( array $unit, int $project_id, string $now ) {
+		global $wpdb;
+
+		$payload_json = wp_json_encode( $unit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+
+		if ( ! is_string( $payload_json ) ) {
+			return new \WP_Error(
+				'lomnio_units_json_encode_failed',
+				__( 'Could not encode unit payload for storage.', 'lomnio-api-connector' )
+			);
+		}
+
+		$columns = $this->columns_from_unit( $unit );
+		$unit_id = $columns['unit_id'];
+		$data    = array_merge(
+			$columns,
+			array(
+				'project_id'     => $project_id,
+				'payload_hash'   => hash( 'sha256', $payload_json ),
+				'payload_json'   => $payload_json,
+				'in_latest_list' => 1,
+				'fetched_at'     => $now,
+				'updated_at'     => $now,
+			)
+		);
+		$table   = $this->table_name();
+
+		$existing_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE unit_id = %s LIMIT 1",
+				$unit_id
+			)
+		);
+
+		$result = $existing_id > 0
+			? $wpdb->update( $table, $data, array( 'id' => $existing_id ) )
+			: $wpdb->insert( $table, $data );
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_units_database_error',
+				__( 'Could not store unit payload in the database.', 'lomnio-api-connector' )
+			);
+		}
+
+		return $unit_id;
+	}
+
+	/**
+	 * Map API resource fields to denormalized database columns.
+	 */
+	private function webhook_field_column_map(): array {
+		return array(
+			'code'           => array( 'code' ),
+			'status'         => array( 'status_code', 'status_label', 'status_color', 'status_is_system' ),
+			'type'           => array( 'type' ),
+			'layout_type'    => array( 'layout_type' ),
+			'room_count'     => array( 'room_count' ),
+			'orientation'    => array( 'orientation' ),
+			'building'       => array( 'building_id', 'building_name' ),
+			'floor'          => array( 'floor_id', 'floor_name', 'floor_number' ),
+			'phase'          => array( 'phase_id', 'phase_name' ),
+			'areas'          => array( 'area', 'area_floor', 'area_gross', 'area_building', 'area_land' ),
+			'pricing'        => array( 'price_without_vat', 'price_with_vat', 'discount_without_vat', 'discount_with_vat', 'discounted_price_without_vat', 'discounted_price_with_vat', 'price_per_sqm', 'vat_rate', 'pricing_hidden', 'pricing_display_text' ),
+			'floor_plan_url' => array( 'floor_plan_url' ),
+			'bundle'         => array( 'bundle_id', 'bundle_name' ),
 		);
 	}
 
