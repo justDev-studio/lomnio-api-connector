@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class SecretStorage {
 	private const OPTION_API_TOKEN      = 'lomnio_api_connector_api_token';
 	private const OPTION_API_TOKEN_META = 'lomnio_api_connector_api_token_meta';
+	private const OPTION_WEBHOOK_SECRET = 'lomnio_api_connector_webhook_secret';
+	private const OPTION_WEBHOOK_META   = 'lomnio_api_connector_webhook_secret_meta';
 	private const CIPHER                = 'aes-256-gcm';
 
 	/**
@@ -136,6 +138,73 @@ final class SecretStorage {
 		}
 
 		return $meta;
+	}
+
+	/**
+	 * Store the project webhook signing secret encrypted.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function set_webhook_secret( string $secret ) {
+		$secret = trim( $secret );
+
+		if ( '' === $secret ) {
+			return new \WP_Error( 'lomnio_webhook_empty_secret', __( 'Enter a webhook signing secret.', 'lomnio-api-connector' ) );
+		}
+
+		$encrypted = $this->encrypt( $secret );
+
+		if ( is_wp_error( $encrypted ) ) {
+			return $encrypted;
+		}
+
+		update_option( self::OPTION_WEBHOOK_SECRET, wp_json_encode( $encrypted ), false );
+		update_option(
+			self::OPTION_WEBHOOK_META,
+			array(
+				'last_four'  => strlen( $secret ) >= 8 ? substr( $secret, -4 ) : '',
+				'updated_at' => time(),
+			),
+			false
+		);
+
+		return true;
+	}
+
+	/**
+	 * Get the decrypted webhook signing secret.
+	 *
+	 * @return string|\WP_Error
+	 */
+	public function get_webhook_secret() {
+		$payload = get_option( self::OPTION_WEBHOOK_SECRET, '' );
+
+		if ( '' === $payload ) {
+			return '';
+		}
+
+		$payload = json_decode( (string) $payload, true );
+
+		if ( ! is_array( $payload ) ) {
+			return new \WP_Error( 'lomnio_webhook_invalid_secret_payload', __( 'Stored webhook secret payload is invalid.', 'lomnio-api-connector' ) );
+		}
+
+		return $this->decrypt( $payload );
+	}
+
+	public function has_webhook_secret(): bool {
+		return '' !== get_option( self::OPTION_WEBHOOK_SECRET, '' );
+	}
+
+	public function clear_webhook_secret(): void {
+		delete_option( self::OPTION_WEBHOOK_SECRET );
+		delete_option( self::OPTION_WEBHOOK_META );
+	}
+
+	public function get_webhook_secret_meta(): array {
+		$meta = get_option( self::OPTION_WEBHOOK_META, array() );
+
+		return is_array( $meta ) ? $meta : array();
 	}
 
 	/**

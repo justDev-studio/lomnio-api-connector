@@ -295,6 +295,28 @@ final class UnitRepository {
 	}
 
 	/**
+	 * Remove a unit deleted or unpublished in Lomnio.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function delete_webhook_unit( $unit_id ) {
+		$this->ensure_table();
+
+		global $wpdb;
+
+		$result = $wpdb->delete( $this->table_name(), array( 'unit_id' => (string) $unit_id ), array( '%s' ) );
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_webhook_unit_delete_failed',
+				__( 'Could not remove the webhook unit.', 'lomnio-api-connector' )
+			);
+		}
+
+		return true;
+	}
+
+	/**
 	 * Get units as detailed UnitResource objects.
 	 */
 	public function get_units( array $filters = array() ): array {

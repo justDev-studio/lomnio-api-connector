@@ -18,6 +18,8 @@ final class SettingsPage {
 	private const PARENT_SLUG  = 'options-general.php';
 	private const ACTION_SAVE  = 'lomnio_api_connector_save';
 	private const ACTION_CLEAR = 'lomnio_api_connector_clear';
+	private const ACTION_SAVE_WEBHOOK_SECRET  = 'lomnio_api_connector_save_webhook_secret';
+	private const ACTION_CLEAR_WEBHOOK_SECRET = 'lomnio_api_connector_clear_webhook_secret';
 
 	/**
 	 * Encrypted secret storage.
@@ -38,6 +40,8 @@ final class SettingsPage {
 		add_action( 'admin_head', array( $this, 'hide_menu_item' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE, array( $this, 'handle_save' ) );
 		add_action( 'admin_post_' . self::ACTION_CLEAR, array( $this, 'handle_clear' ) );
+		add_action( 'admin_post_' . self::ACTION_SAVE_WEBHOOK_SECRET, array( $this, 'handle_save_webhook_secret' ) );
+		add_action( 'admin_post_' . self::ACTION_CLEAR_WEBHOOK_SECRET, array( $this, 'handle_clear_webhook_secret' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( LOMNIO_API_CONNECTOR_PLUGIN_FILE ), array( $this, 'plugin_action_links' ) );
 	}
 
@@ -108,6 +112,25 @@ final class SettingsPage {
 		$this->redirect_with_status( 'cleared' );
 	}
 
+	public function handle_save_webhook_secret(): void {
+		$this->authorize_request( self::ACTION_SAVE_WEBHOOK_SECRET );
+
+		$secret = isset( $_POST['lomnio_webhook_secret'] ) ? (string) wp_unslash( $_POST['lomnio_webhook_secret'] ) : '';
+		$result = $this->secret_storage->set_webhook_secret( $secret );
+
+		if ( is_wp_error( $result ) ) {
+			$this->redirect_with_status( 'error', $result->get_error_code() );
+		}
+
+		$this->redirect_with_status( 'webhook_secret_saved' );
+	}
+
+	public function handle_clear_webhook_secret(): void {
+		$this->authorize_request( self::ACTION_CLEAR_WEBHOOK_SECRET );
+		$this->secret_storage->clear_webhook_secret();
+		$this->redirect_with_status( 'webhook_secret_cleared' );
+	}
+
 	/**
 	 * Render settings page.
 	 */
@@ -121,6 +144,9 @@ final class SettingsPage {
 		$last_four       = isset( $meta['last_four'] ) ? (string) $meta['last_four'] : '';
 		$updated_at      = isset( $meta['updated_at'] ) ? (int) $meta['updated_at'] : 0;
 		$updated_at_text = $updated_at > 0 ? date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $updated_at ) : '';
+		$webhook_meta       = $this->secret_storage->get_webhook_secret_meta();
+		$has_webhook_secret = $this->secret_storage->has_webhook_secret();
+		$webhook_last_four  = isset( $webhook_meta['last_four'] ) ? (string) $webhook_meta['last_four'] : '';
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Lomnio API Connector', 'lomnio-api-connector' ); ?></h1>
@@ -194,6 +220,30 @@ final class SettingsPage {
 					<?php submit_button( __( 'Clear API token', 'lomnio-api-connector' ), 'delete', 'submit', false ); ?>
 				</form>
 			<?php endif; ?>
+
+			<hr style="margin: 32px 0; max-width: 720px;">
+			<h2><?php echo esc_html__( 'Webhook signing secret', 'lomnio-api-connector' ); ?></h2>
+			<p>
+				<?php echo esc_html( $has_webhook_secret ? __( 'Configured', 'lomnio-api-connector' ) : __( 'Not configured', 'lomnio-api-connector' ) ); ?>
+				<?php if ( '' !== $webhook_last_four ) : ?>
+					<code>…<?php echo esc_html( $webhook_last_four ); ?></code>
+				<?php endif; ?>
+			</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width: 720px;">
+				<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_SAVE_WEBHOOK_SECRET ); ?>">
+				<?php wp_nonce_field( self::ACTION_SAVE_WEBHOOK_SECRET ); ?>
+				<label for="lomnio_webhook_secret"><strong><?php echo esc_html__( 'Project signing secret', 'lomnio-api-connector' ); ?></strong></label><br>
+				<input type="password" id="lomnio_webhook_secret" name="lomnio_webhook_secret" class="regular-text" autocomplete="off">
+				<p class="description"><?php echo esc_html__( 'Enter the signing secret configured for this project in Lomnio. It is encrypted and never displayed back.', 'lomnio-api-connector' ); ?></p>
+				<?php submit_button( __( 'Save webhook secret', 'lomnio-api-connector' ) ); ?>
+			</form>
+			<?php if ( $has_webhook_secret ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_CLEAR_WEBHOOK_SECRET ); ?>">
+					<?php wp_nonce_field( self::ACTION_CLEAR_WEBHOOK_SECRET ); ?>
+					<?php submit_button( __( 'Clear webhook secret', 'lomnio-api-connector' ), 'delete', 'submit', false ); ?>
+				</form>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -226,6 +276,16 @@ final class SettingsPage {
 			return;
 		}
 
+		if ( 'webhook_secret_saved' === $status ) {
+			$this->notice( __( 'Webhook signing secret saved securely.', 'lomnio-api-connector' ), 'success' );
+			return;
+		}
+
+		if ( 'webhook_secret_cleared' === $status ) {
+			$this->notice( __( 'Webhook signing secret cleared.', 'lomnio-api-connector' ), 'success' );
+			return;
+		}
+
 		if ( 'error' === $status ) {
 			$message = $this->error_message( $code );
 			$this->notice( $message, 'error' );
@@ -254,6 +314,7 @@ final class SettingsPage {
 			'lomnio_api_connector_encrypt_failed'       => __( 'Could not encrypt the API token.', 'lomnio-api-connector' ),
 			'lomnio_api_connector_invalid_token_payload' => __( 'Stored API token payload is invalid.', 'lomnio-api-connector' ),
 			'lomnio_api_connector_decrypt_failed'       => __( 'Could not decrypt the stored API token.', 'lomnio-api-connector' ),
+			'lomnio_webhook_empty_secret'               => __( 'Enter a webhook signing secret.', 'lomnio-api-connector' ),
 		);
 
 		return $messages[ $code ] ?? __( 'Could not save the API token.', 'lomnio-api-connector' );

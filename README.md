@@ -162,7 +162,9 @@ The standard WordPress REST API webhook receives external Lomnio data:
 POST https://site.com/wp-json/lomnio/v1/webhook
 ```
 
-The webhook requires `Authorization: Bearer TOKEN`, using the same API token saved in the plugin settings. Missing or incorrect credentials return HTTP `401`. `unit.*` events update only the affected unit row and only the resource groups named in `changed_fields`. For example, `changed_fields: ["status"]` updates the unit status columns and the status object in its stored JSON. A complete row is inserted when the unit does not exist locally. No full synchronization is triggered. Deleted units are excluded from frontend queries. Other event types are accepted with an `ignored` status until handlers are implemented.
+Configure the Lomnio project signing secret on the plugin settings page. Every request must include `X-Lomnio-Signature: sha256=...`; the plugin verifies the HMAC-SHA256 signature over the raw body and returns HTTP `401` when it is invalid. Delivery IDs from `X-Lomnio-Delivery` are deduplicated for seven days.
+
+`webhook.test` validates the integration without changing data. Unit events upsert the complete `unit` snapshot. When `deleted` is true or `visible` is false, the local unit is removed. No full pull synchronization is triggered.
 
 For temporary integration debugging, the most recently received request is shown to administrators on the Lomnio API Endpoints page. The view includes headers, raw body, JSON, form, query, and file parameters and can be cleared from the same page. Raw bodies larger than 1 MB are truncated.
 
