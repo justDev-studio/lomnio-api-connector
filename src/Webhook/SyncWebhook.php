@@ -8,6 +8,7 @@
 namespace LomnioApiConnector\Webhook;
 
 use LomnioApiConnector\Database\UnitRepository;
+use LomnioApiConnector\Security\SecretStorage;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -26,8 +27,16 @@ final class SyncWebhook {
 	 */
 	private UnitRepository $unit_repository;
 
-	public function __construct( ?UnitRepository $unit_repository = null ) {
+	/**
+	 * Encrypted API token storage.
+	 *
+	 * @var SecretStorage
+	 */
+	private SecretStorage $secret_storage;
+
+	public function __construct( ?UnitRepository $unit_repository = null, ?SecretStorage $secret_storage = null ) {
 		$this->unit_repository = $unit_repository ?? new UnitRepository();
+		$this->secret_storage  = $secret_storage ?? new SecretStorage();
 	}
 
 	/**
@@ -47,9 +56,43 @@ final class SyncWebhook {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle' ),
-				'permission_callback' => '__return_true',
+				'permission_callback' => array( $this, 'authorize' ),
 			)
 		);
+	}
+
+	/**
+	 * Require the same Bearer token that is configured for Lomnio API calls.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function authorize( \WP_REST_Request $request ) {
+		$expected = $this->secret_storage->get_authorization_header();
+
+		if ( is_wp_error( $expected ) ) {
+			$expected->add_data( array( 'status' => 500 ) );
+			return $expected;
+		}
+
+		if ( '' === $expected ) {
+			return new \WP_Error(
+				'lomnio_webhook_token_not_configured',
+				__( 'Lomnio API token is not configured.', 'lomnio-api-connector' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		$provided = trim( (string) $request->get_header( 'Authorization' ) );
+
+		if ( '' === $provided || ! hash_equals( $expected, $provided ) ) {
+			return new \WP_Error(
+				'lomnio_webhook_unauthorized',
+				__( 'Invalid webhook Authorization header.', 'lomnio-api-connector' ),
+				array( 'status' => 401 )
+			);
+		}
+
+		return true;
 	}
 
 	/**

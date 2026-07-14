@@ -297,12 +297,16 @@ final class EndpointsPage {
 			</p>
 
 			<h2><?php echo esc_html__( 'External sync webhook', 'lomnio-api-connector' ); ?></h2>
-			<p><?php echo esc_html__( 'Send a POST request without authorization. Supported events are applied directly without a full synchronization.', 'lomnio-api-connector' ); ?></p>
+			<p><?php echo esc_html__( 'Send a POST request with the saved Lomnio API token as a Bearer Authorization header. Supported events are applied directly without a full synchronization.', 'lomnio-api-connector' ); ?></p>
 			<table class="widefat striped" style="max-width: 920px; margin-bottom: 24px;">
 				<tbody>
 					<tr>
 						<th scope="row"><?php echo esc_html__( 'URL', 'lomnio-api-connector' ); ?></th>
 						<td><code><?php echo esc_html( $this->sync_webhook->url() ); ?></code></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php echo esc_html__( 'Authorization', 'lomnio-api-connector' ); ?></th>
+						<td><code>Authorization: Bearer &lt;saved Lomnio API token&gt;</code></td>
 					</tr>
 				</tbody>
 			</table>
