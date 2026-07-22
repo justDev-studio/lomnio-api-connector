@@ -7,6 +7,7 @@
 
 namespace LomnioApiConnector\Sync;
 
+use LomnioApiConnector\Database\DataRevision;
 use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Security\SecretStorage;
 
@@ -145,6 +146,7 @@ final class ProjectSync {
 			return $stored;
 		}
 
+		DataRevision::bump();
 		$this->store_meta( true, __( 'Project synchronized successfully.', 'lomnio-api-connector' ) );
 
 		return true;

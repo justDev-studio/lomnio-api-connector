@@ -7,6 +7,7 @@
 
 namespace LomnioApiConnector\Sync;
 
+use LomnioApiConnector\Database\DataRevision;
 use LomnioApiConnector\Database\FloorRepository;
 use LomnioApiConnector\Security\SecretStorage;
 
@@ -223,6 +224,7 @@ final class FloorsSync {
 			return $stored;
 		}
 
+		DataRevision::bump();
 		$this->store_meta(
 			true,
 			sprintf(

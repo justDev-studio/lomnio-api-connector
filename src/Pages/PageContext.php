@@ -91,7 +91,8 @@ final class PageContext {
 		$ttl     = max( 0, (int) $this->settings()['acf_cache_ttl'] );
 		$lang    = defined( 'ICL_LANGUAGE_CODE' ) ? ICL_LANGUAGE_CODE : get_locale();
 		$ver     = $post_id ? (string) get_post_modified_time( 'U', true, $post_id ) : '0';
-		$key     = sprintf( 'lomnio_page_fields_%s_%s_%s_%s', $page, $post_id ?: '0', $lang ?: 'na', $ver );
+		$data_ver = (string) get_option( \LomnioApiConnector\Database\DataRevision::OPTION_NAME, '0' );
+		$key      = sprintf( 'lomnio_page_fields_%s_%s_%s_%s_%s', $page, $post_id ?: '0', $lang ?: 'na', $ver, $data_ver );
 
 		$fields = $this->cache(
 			$key,

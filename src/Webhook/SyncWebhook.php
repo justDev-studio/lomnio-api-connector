@@ -7,6 +7,7 @@
 
 namespace LomnioApiConnector\Webhook;
 
+use LomnioApiConnector\Database\DataRevision;
 use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Security\SecretStorage;
 
@@ -209,6 +210,8 @@ final class SyncWebhook {
 			$result->add_data( array( 'status' => 500 ) );
 			return $result;
 		}
+
+		DataRevision::bump();
 
 		return new \WP_REST_Response(
 			array(

@@ -7,6 +7,7 @@
 
 namespace LomnioApiConnector\Sync;
 
+use LomnioApiConnector\Database\DataRevision;
 use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Security\SecretStorage;
 
@@ -232,6 +233,7 @@ final class UnitsSync {
 			return $stored;
 		}
 
+		DataRevision::bump();
 		$this->store_meta(
 			true,
 			sprintf(
