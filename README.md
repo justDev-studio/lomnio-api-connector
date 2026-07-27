@@ -257,6 +257,24 @@ track('contact_form_open');
 track('download', { metadata: ['type=floor_plan'] });
 ```
 
+Attach the same anonymous visitor identity to a Vue/Inertia lead form at submit time:
+
+```js
+const { withVisitorToken } = useLomnioTracking();
+
+form.transform((data) => withVisitorToken(data)).post('/contact');
+```
+
+The resulting lead payload includes:
+
+```json
+{
+	"visitor_token": "123e4567-e89b-42d3-a456-426614174000"
+}
+```
+
+When analytics consent has not been granted, `withVisitorToken()` leaves `visitor_token` out of the request.
+
 The SDK automatically records initial/Inertia page views, unit views when unit context is configured, and time on page. Visitor and queued event data is created only after consent when `Consent required` is selected.
 
 ## Stored Data

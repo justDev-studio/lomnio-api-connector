@@ -48,7 +48,12 @@ final class LeadSender {
 			);
 		}
 
+		if ( empty( $fields['visitor_token'] ) && ! empty( $context['visitor_token'] ) ) {
+			$fields['visitor_token'] = $context['visitor_token'];
+		}
+
 		$fields = $this->sanitize_payload( $fields );
+		$fields = $this->normalize_visitor_token( $fields );
 
 		if ( empty( $fields ) ) {
 			$error = new \WP_Error(
@@ -230,6 +235,29 @@ final class LeadSender {
 		}
 
 		return $sanitized;
+	}
+
+	/**
+	 * Normalize the optional tracking identity attached to a lead.
+	 */
+	private function normalize_visitor_token( array $fields ): array {
+		if ( ! isset( $fields['visitor_token'] ) || ! is_scalar( $fields['visitor_token'] ) ) {
+			unset( $fields['visitor_token'] );
+			return $fields;
+		}
+
+		$token = trim( (string) $fields['visitor_token'] );
+
+		if ( '' === $token ) {
+			unset( $fields['visitor_token'] );
+			return $fields;
+		}
+
+		$fields['visitor_token'] = function_exists( 'mb_substr' )
+			? mb_substr( $token, 0, 255, 'UTF-8' )
+			: substr( $token, 0, 255 );
+
+		return $fields;
 	}
 
 	/**

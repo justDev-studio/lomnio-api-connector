@@ -356,6 +356,23 @@
 		recordUnitView();
 	}
 
+	function getVisitorToken() {
+		return consent ? identity(window.localStorage, keys.visitor) : null;
+	}
+
+	function withVisitorToken(fields) {
+		var payload = Object.assign({}, fields || {});
+		var visitorToken = getVisitorToken();
+
+		if ( visitorToken ) {
+			payload.visitor_token = visitorToken;
+		} else {
+			delete payload.visitor_token;
+		}
+
+		return payload;
+	}
+
 	function consentEvent(event) {
 		var detail = event && event.detail;
 		setConsent(detail === true || (detail && detail.granted === true));
@@ -367,6 +384,8 @@
 		track: track,
 		setContext: setContext,
 		setConsent: setConsent,
+		getVisitorToken: getVisitorToken,
+		withVisitorToken: withVisitorToken,
 		flush: flush
 	};
 

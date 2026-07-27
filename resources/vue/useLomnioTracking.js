@@ -16,15 +16,20 @@ export function useLomnioTracking(options = {}) {
 			: unref(options.unitId)
 	);
 
-	const stopContextWatch = watch(unitId, () => {
-		sdk()?.setContext({
-			unit_id: unitId() ?? null,
-		});
-	}, { immediate: true });
+	const managesUnitContext = Object.prototype.hasOwnProperty.call(options, 'unitId');
+	const stopContextWatch = managesUnitContext
+		? watch(unitId, () => {
+			sdk()?.setContext({
+				unit_id: unitId() ?? null,
+			});
+		}, { immediate: true })
+		: null;
 
 	onBeforeUnmount(() => {
-		stopContextWatch();
-		sdk()?.setContext({ unit_id: null });
+		if ( stopContextWatch ) {
+			stopContextWatch();
+			sdk()?.setContext({ unit_id: null });
+		}
 	});
 
 	return {
@@ -33,6 +38,12 @@ export function useLomnioTracking(options = {}) {
 		},
 		setConsent(granted) {
 			sdk()?.setConsent(granted);
+		},
+		getVisitorToken() {
+			return sdk()?.getVisitorToken() ?? null;
+		},
+		withVisitorToken(fields = {}) {
+			return sdk()?.withVisitorToken(fields) ?? { ...fields };
 		},
 		flush() {
 			return sdk()?.flush() ?? Promise.resolve(false);
