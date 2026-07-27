@@ -132,10 +132,16 @@ final class TrackingController {
 			return new \WP_Error( 'invalid_ts', __( 'ts must be a Unix timestamp integer.', 'lomnio-api-connector' ) );
 		}
 
+		$timestamp = (int) $ts;
+
+		if ( $timestamp > 0 && $timestamp < 1000000000000 ) {
+			$timestamp *= 1000;
+		}
+
 		$clean = array(
 			'visitor_token' => $visitor,
 			'event_type'    => $type,
-			'ts'            => (int) $ts,
+			'ts'            => $timestamp,
 		);
 
 		$string_fields = array(

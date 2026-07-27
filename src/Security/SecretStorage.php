@@ -16,6 +16,8 @@ final class SecretStorage {
 	private const OPTION_API_TOKEN_META = 'lomnio_api_connector_api_token_meta';
 	private const OPTION_WEBHOOK_SECRET = 'lomnio_api_connector_webhook_secret';
 	private const OPTION_WEBHOOK_META   = 'lomnio_api_connector_webhook_secret_meta';
+	private const OPTION_TRACKING_TOKEN = 'lomnio_api_connector_tracking_token';
+	private const OPTION_TRACKING_META  = 'lomnio_api_connector_tracking_token_meta';
 	private const CIPHER                = 'aes-256-gcm';
 
 	/**
@@ -138,6 +140,96 @@ final class SecretStorage {
 		}
 
 		return $meta;
+	}
+
+	/**
+	 * Store the write-only Website Tracking token encrypted.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function set_tracking_token( string $token ) {
+		$token = $this->normalize_api_token( $token );
+
+		if ( '' === $token ) {
+			return new \WP_Error(
+				'lomnio_tracking_empty_token',
+				__( 'Enter a valid Website Tracking token.', 'lomnio-api-connector' )
+			);
+		}
+
+		$encrypted = $this->encrypt( $token );
+
+		if ( is_wp_error( $encrypted ) ) {
+			return $encrypted;
+		}
+
+		update_option( self::OPTION_TRACKING_TOKEN, wp_json_encode( $encrypted ), false );
+		update_option(
+			self::OPTION_TRACKING_META,
+			array(
+				'last_four'  => strlen( $token ) >= 8 ? substr( $token, -4 ) : '',
+				'updated_at' => time(),
+			),
+			false
+		);
+
+		return true;
+	}
+
+	/**
+	 * Get the decrypted Website Tracking token.
+	 *
+	 * @return string|\WP_Error
+	 */
+	public function get_tracking_token() {
+		$payload = get_option( self::OPTION_TRACKING_TOKEN, '' );
+
+		if ( '' === $payload ) {
+			return '';
+		}
+
+		$payload = json_decode( (string) $payload, true );
+
+		if ( ! is_array( $payload ) ) {
+			return new \WP_Error(
+				'lomnio_tracking_invalid_token_payload',
+				__( 'Stored Website Tracking token payload is invalid.', 'lomnio-api-connector' )
+			);
+		}
+
+		return $this->decrypt( $payload );
+	}
+
+	/**
+	 * Get authorization headers for tracking requests only.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function get_tracking_authorization_headers() {
+		$token = $this->get_tracking_token();
+
+		if ( is_wp_error( $token ) ) {
+			return $token;
+		}
+
+		return '' === $token ? array() : array(
+			'Authorization' => 'Bearer ' . $token,
+		);
+	}
+
+	public function has_tracking_token(): bool {
+		return '' !== get_option( self::OPTION_TRACKING_TOKEN, '' );
+	}
+
+	public function clear_tracking_token(): void {
+		delete_option( self::OPTION_TRACKING_TOKEN );
+		delete_option( self::OPTION_TRACKING_META );
+	}
+
+	public function get_tracking_token_meta(): array {
+		$meta = get_option( self::OPTION_TRACKING_META, array() );
+
+		return is_array( $meta ) ? $meta : array();
 	}
 
 	/**

@@ -55,7 +55,7 @@ final class TrackingSender {
 			);
 		}
 
-		$headers = $this->secret_storage->get_authorization_headers();
+		$headers = $this->secret_storage->get_tracking_authorization_headers();
 
 		if ( is_wp_error( $headers ) ) {
 			$this->store_meta( false, $headers->get_error_message() );
@@ -65,7 +65,7 @@ final class TrackingSender {
 		if ( empty( $headers ) ) {
 			$error = new \WP_Error(
 				'lomnio_tracking_missing_api_token',
-				__( 'Missing Lomnio API token.', 'lomnio-api-connector' ),
+				__( 'Missing Lomnio Website Tracking token.', 'lomnio-api-connector' ),
 				array( 'status' => 503 )
 			);
 			$this->store_meta( false, $error->get_error_message() );
@@ -111,15 +111,25 @@ final class TrackingSender {
 		$decoded     = json_decode( $raw_body, true );
 		$success     = $status_code >= 200 && $status_code < 300;
 
-		$this->store_meta(
-			$success,
-			sprintf(
-				/* translators: 1: HTTP status, 2: event count. */
-				__( 'HTTP %1$d. Events submitted: %2$d.', 'lomnio-api-connector' ),
-				$status_code,
-				count( $events )
-			)
+		$created    = is_array( $decoded ) && isset( $decoded['created'] ) ? (int) $decoded['created'] : null;
+		$duplicates = is_array( $decoded ) && isset( $decoded['duplicates'] ) ? (int) $decoded['duplicates'] : null;
+		$message    = sprintf(
+			/* translators: 1: HTTP status, 2: event count. */
+			__( 'HTTP %1$d. Events submitted: %2$d.', 'lomnio-api-connector' ),
+			$status_code,
+			count( $events )
 		);
+
+		if ( null !== $created && null !== $duplicates ) {
+			$message .= sprintf(
+				/* translators: 1: created events, 2: duplicate events. */
+				__( ' Created: %1$d. Duplicates: %2$d.', 'lomnio-api-connector' ),
+				$created,
+				$duplicates
+			);
+		}
+
+		$this->store_meta( $success, $message );
 
 		return array(
 			'status_code' => $status_code,

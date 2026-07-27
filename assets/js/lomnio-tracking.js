@@ -160,10 +160,28 @@
 		}
 		try {
 			var parsed = JSON.parse(value);
-			return Array.isArray(parsed) ? parsed.slice(-500) : [];
+			return Array.isArray(parsed) ? parsed.slice(-500).map(normalizeEventTimestamp) : [];
 		} catch (error) {
 			return [];
 		}
+	}
+
+	function normalizeTimestamp(value) {
+		var timestamp = Number(value);
+
+		if ( ! Number.isInteger(timestamp) || timestamp <= 0 ) {
+			return Date.now();
+		}
+
+		return timestamp < 1000000000000 ? timestamp * 1000 : timestamp;
+	}
+
+	function normalizeEventTimestamp(event) {
+		if ( event && typeof event === 'object' ) {
+			event.ts = normalizeTimestamp(event.ts);
+		}
+
+		return event;
 	}
 
 	function saveQueue() {
@@ -192,7 +210,7 @@
 			url: cleanUrl(options.url || window.location.href),
 			title: String(options.title || document.title || '').slice(0, 255),
 			referrer: cleanUrl(options.referrer || previousUrl),
-			ts: Number.isInteger(options.ts) ? options.ts : Math.floor(Date.now() / 1000)
+			ts: normalizeTimestamp(options.ts)
 		};
 		var unitId = positiveInteger(options.unit_id) || context.unit_id;
 		var duration = Number(options.duration);

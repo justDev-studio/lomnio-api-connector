@@ -39,8 +39,10 @@ final class TrackingFrontend {
 
 		$handle = 'lomnio-tracking';
 		$src    = LOMNIO_API_CONNECTOR_PLUGIN_URL . 'assets/js/lomnio-tracking.js';
+		$path   = LOMNIO_API_CONNECTOR_PLUGIN_PATH . 'assets/js/lomnio-tracking.js';
+		$version = file_exists( $path ) ? (string) filemtime( $path ) : LOMNIO_API_CONNECTOR_VERSION;
 
-		wp_enqueue_script( $handle, $src, array(), LOMNIO_API_CONNECTOR_VERSION, true );
+		wp_enqueue_script( $handle, $src, array(), $version, true );
 		wp_add_inline_script(
 			$handle,
 			'window.LomnioTrackingConfig = ' . wp_json_encode(
