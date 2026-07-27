@@ -205,6 +205,60 @@ wp-content/uploads/lomnio_leads_log.txt
 
 The sender returns either a result array or `WP_Error`.
 
+## Tracking
+
+The plugin exposes a same-site browser proxy and keeps the Lomnio API token on the server:
+
+```text
+POST /wp-json/lomnio/v1/tracking/events
+```
+
+The proxy accepts the official Lomnio batch shape with 1-50 events and forwards it to `/v1/tracking/events/batch`. Tracking can be enabled, disabled, and restricted by `WP_ENV` on the Endpoints page. Consent behavior is configured under Lomnio API → Pages → Tracking.
+
+The plugin loads a build-free browser SDK:
+
+```js
+window.LomnioTracking.track('gallery_browse', {
+	unit_id: 1868,
+	metadata: ['slide=2'],
+});
+
+window.LomnioTracking.setConsent(true);
+window.LomnioTracking.setContext({ unit_id: 1868 });
+window.LomnioTracking.flush();
+```
+
+For consent management, either call `setConsent()` or dispatch:
+
+```js
+window.dispatchEvent(
+	new CustomEvent('lomnio:consent', {
+		detail: { granted: true },
+	})
+);
+```
+
+A Vue adapter that can be copied into the theme is provided at:
+
+```text
+resources/vue/useLomnioTracking.js
+```
+
+Example:
+
+```js
+import { useLomnioTracking } from '@/composables/useLomnioTracking';
+
+const { track } = useLomnioTracking({
+	unitId: () => props.unit?.id,
+});
+
+track('contact_form_open');
+track('download', { metadata: ['type=floor_plan'] });
+```
+
+The SDK automatically records initial/Inertia page views, unit views when unit context is configured, and time on page. Visitor and queued event data is created only after consent when `Consent required` is selected.
+
 ## Stored Data
 
 Project data is stored in:

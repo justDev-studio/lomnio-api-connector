@@ -21,6 +21,9 @@ use LomnioApiConnector\Security\SecretStorage;
 use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
 use LomnioApiConnector\Sync\UnitsSync;
+use LomnioApiConnector\Tracking\TrackingController;
+use LomnioApiConnector\Tracking\TrackingFrontend;
+use LomnioApiConnector\Tracking\TrackingSender;
 use LomnioApiConnector\Webhook\SyncWebhook;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -85,6 +88,11 @@ final class Plugin {
 		$page_settings_post_types->hooks();
 		$page_router   = new PageRouter( $page_settings );
 		$page_router->hooks();
+		$tracking_sender = new TrackingSender( $this->secret_storage() );
+		$tracking_controller = new TrackingController( $tracking_sender );
+		$tracking_controller->hooks();
+		$tracking_frontend = new TrackingFrontend( $tracking_sender, $page_settings );
+		$tracking_frontend->hooks();
 
 		if ( is_admin() ) {
 			$endpoints_page = new EndpointsPage( $project_sync, $units_sync, $floors_sync, $sync_webhook );

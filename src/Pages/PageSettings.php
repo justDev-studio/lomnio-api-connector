@@ -70,6 +70,7 @@ final class PageSettings {
 			'not_found_component'     => '404',
 			'flats_home_page_id'      => 0,
 			'acf_cache_ttl'           => 300,
+			'tracking_consent_mode'    => 'required',
 		);
 	}
 
@@ -107,6 +108,11 @@ final class PageSettings {
 			if ( isset( $settings[ $key ] ) ) {
 				$sanitized[ $key ] = max( 0, (int) $settings[ $key ] );
 			}
+		}
+
+		if ( isset( $settings['tracking_consent_mode'] ) ) {
+			$mode = sanitize_key( (string) $settings['tracking_consent_mode'] );
+			$sanitized['tracking_consent_mode'] = in_array( $mode, array( 'required', 'always' ), true ) ? $mode : 'required';
 		}
 
 		if ( empty( $sanitized['floor_slug'] ?? '' ) ) {

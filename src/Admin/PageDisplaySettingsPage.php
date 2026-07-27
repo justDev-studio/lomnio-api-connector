@@ -127,6 +127,30 @@ final class PageDisplaySettingsPage {
 					</tbody>
 				</table>
 
+				<h2><?php echo esc_html__( 'Tracking', 'lomnio-api-connector' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tbody>
+						<tr>
+							<th scope="row">
+								<label for="lomnio_pages_tracking_consent_mode"><?php echo esc_html__( 'Analytics consent', 'lomnio-api-connector' ); ?></label>
+							</th>
+							<td>
+								<select id="lomnio_pages_tracking_consent_mode" name="lomnio_pages[tracking_consent_mode]">
+									<option value="required" <?php selected( $settings['tracking_consent_mode'], 'required' ); ?>>
+										<?php echo esc_html__( 'Consent required', 'lomnio-api-connector' ); ?>
+									</option>
+									<option value="always" <?php selected( $settings['tracking_consent_mode'], 'always' ); ?>>
+										<?php echo esc_html__( 'Always anonymous', 'lomnio-api-connector' ); ?>
+									</option>
+								</select>
+								<p class="description">
+									<?php echo esc_html__( 'Consent required waits for LomnioTracking.setConsent(true) or a lomnio:consent browser event.', 'lomnio-api-connector' ); ?>
+								</p>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
 				<?php submit_button( __( 'Save page settings', 'lomnio-api-connector' ) ); ?>
 			</form>
 		</div>

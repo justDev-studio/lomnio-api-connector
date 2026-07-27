@@ -721,11 +721,23 @@ final class EndpointsPage {
 				'has_table'            => false,
 				'env_controls'         => true,
 			),
+			'tracking' => array(
+				'label'                => 'Tracking',
+				'description'          => __( 'Send visitor tracking event batches.', 'lomnio-api-connector' ),
+				'method'               => 'POST',
+				'path'                 => '/v1/tracking/events/batch',
+				'default_schedule'     => 'manual',
+				'default_allowed_envs' => array( 'production' ),
+				'has_schedule'         => false,
+				'syncable'             => false,
+				'has_table'            => false,
+				'env_controls'         => true,
+			),
 		);
 	}
 
 	/**
-	 * WP_ENV values available for lead sending.
+	 * WP_ENV values available for outbound sending.
 	 */
 	private function allowed_environments(): array {
 		return array(
