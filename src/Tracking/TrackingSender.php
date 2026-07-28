@@ -55,7 +55,7 @@ final class TrackingSender {
 			);
 		}
 
-		$headers = $this->secret_storage->get_tracking_authorization_headers();
+		$headers = $this->secret_storage->get_authorization_headers();
 
 		if ( is_wp_error( $headers ) ) {
 			$this->store_meta( false, $headers->get_error_message() );
@@ -65,7 +65,7 @@ final class TrackingSender {
 		if ( empty( $headers ) ) {
 			$error = new \WP_Error(
 				'lomnio_tracking_missing_api_token',
-				__( 'Missing Lomnio Website Tracking token.', 'lomnio-api-connector' ),
+				__( 'Missing Lomnio API token.', 'lomnio-api-connector' ),
 				array( 'status' => 503 )
 			);
 			$this->store_meta( false, $error->get_error_message() );

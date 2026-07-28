@@ -207,13 +207,13 @@ The sender returns either a result array or `WP_Error`.
 
 ## Tracking
 
-The plugin exposes a same-site browser proxy and keeps the Lomnio Website Tracking token on the server:
+The plugin exposes a same-site browser proxy and keeps the Lomnio API token on the server:
 
 ```text
 POST /wp-json/lomnio/v1/tracking/events
 ```
 
-Create a project token of type `Website Tracking` in Lomnio and save it under Lomnio API → API token settings → Website Tracking token. Do not reuse the Inventory/Leads API token for tracking.
+Tracking uses the same API token configured under Lomnio API → API token settings → API Authorization as the other outgoing Lomnio API requests. The plugin sends it as the `Authorization: Bearer <token>` header; no separate tracking token is required.
 
 The proxy accepts the official Lomnio batch shape with 1-50 events and forwards it to `/v1/tracking/events/batch`. Tracking can be enabled, disabled, and restricted by `WP_ENV` on the Endpoints page. Consent behavior is configured under Lomnio API → Pages → Tracking.
 

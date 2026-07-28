@@ -20,8 +20,6 @@ final class SettingsPage {
 	private const ACTION_CLEAR = 'lomnio_api_connector_clear';
 	private const ACTION_SAVE_WEBHOOK_SECRET  = 'lomnio_api_connector_save_webhook_secret';
 	private const ACTION_CLEAR_WEBHOOK_SECRET = 'lomnio_api_connector_clear_webhook_secret';
-	private const ACTION_SAVE_TRACKING_TOKEN  = 'lomnio_api_connector_save_tracking_token';
-	private const ACTION_CLEAR_TRACKING_TOKEN = 'lomnio_api_connector_clear_tracking_token';
 
 	/**
 	 * Encrypted secret storage.
@@ -44,8 +42,6 @@ final class SettingsPage {
 		add_action( 'admin_post_' . self::ACTION_CLEAR, array( $this, 'handle_clear' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_WEBHOOK_SECRET, array( $this, 'handle_save_webhook_secret' ) );
 		add_action( 'admin_post_' . self::ACTION_CLEAR_WEBHOOK_SECRET, array( $this, 'handle_clear_webhook_secret' ) );
-		add_action( 'admin_post_' . self::ACTION_SAVE_TRACKING_TOKEN, array( $this, 'handle_save_tracking_token' ) );
-		add_action( 'admin_post_' . self::ACTION_CLEAR_TRACKING_TOKEN, array( $this, 'handle_clear_tracking_token' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( LOMNIO_API_CONNECTOR_PLUGIN_FILE ), array( $this, 'plugin_action_links' ) );
 	}
 
@@ -135,25 +131,6 @@ final class SettingsPage {
 		$this->redirect_with_status( 'webhook_secret_cleared' );
 	}
 
-	public function handle_save_tracking_token(): void {
-		$this->authorize_request( self::ACTION_SAVE_TRACKING_TOKEN );
-
-		$token  = isset( $_POST['lomnio_tracking_token'] ) ? (string) wp_unslash( $_POST['lomnio_tracking_token'] ) : '';
-		$result = $this->secret_storage->set_tracking_token( $token );
-
-		if ( is_wp_error( $result ) ) {
-			$this->redirect_with_status( 'error', $result->get_error_code() );
-		}
-
-		$this->redirect_with_status( 'tracking_token_saved' );
-	}
-
-	public function handle_clear_tracking_token(): void {
-		$this->authorize_request( self::ACTION_CLEAR_TRACKING_TOKEN );
-		$this->secret_storage->clear_tracking_token();
-		$this->redirect_with_status( 'tracking_token_cleared' );
-	}
-
 	/**
 	 * Render settings page.
 	 */
@@ -170,9 +147,6 @@ final class SettingsPage {
 		$webhook_meta       = $this->secret_storage->get_webhook_secret_meta();
 		$has_webhook_secret = $this->secret_storage->has_webhook_secret();
 		$webhook_last_four  = isset( $webhook_meta['last_four'] ) ? (string) $webhook_meta['last_four'] : '';
-		$tracking_meta      = $this->secret_storage->get_tracking_token_meta();
-		$has_tracking_token = $this->secret_storage->has_tracking_token();
-		$tracking_last_four = isset( $tracking_meta['last_four'] ) ? (string) $tracking_meta['last_four'] : '';
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Lomnio API Connector', 'lomnio-api-connector' ); ?></h1>
@@ -248,39 +222,6 @@ final class SettingsPage {
 			<?php endif; ?>
 
 			<hr style="margin: 32px 0; max-width: 720px;">
-			<h2><?php echo esc_html__( 'Website Tracking token', 'lomnio-api-connector' ); ?></h2>
-			<p>
-				<?php echo esc_html( $has_tracking_token ? __( 'Configured', 'lomnio-api-connector' ) : __( 'Not configured', 'lomnio-api-connector' ) ); ?>
-				<?php if ( '' !== $tracking_last_four ) : ?>
-					<code>…<?php echo esc_html( $tracking_last_four ); ?></code>
-				<?php endif; ?>
-			</p>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width: 720px;">
-				<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_SAVE_TRACKING_TOKEN ); ?>">
-				<?php wp_nonce_field( self::ACTION_SAVE_TRACKING_TOKEN ); ?>
-				<label for="lomnio_tracking_token"><strong><?php echo esc_html__( 'Tracking token', 'lomnio-api-connector' ); ?></strong></label><br>
-				<input
-					type="password"
-					id="lomnio_tracking_token"
-					name="lomnio_tracking_token"
-					class="regular-text"
-					autocomplete="off"
-					placeholder="<?php echo esc_attr__( 'Website Tracking token', 'lomnio-api-connector' ); ?>"
-				>
-				<p class="description">
-					<?php echo esc_html__( 'Create a project token of type Website Tracking in Lomnio and paste it here. Inventory and Leads API tokens must not be used for tracking.', 'lomnio-api-connector' ); ?>
-				</p>
-				<?php submit_button( __( 'Save tracking token', 'lomnio-api-connector' ) ); ?>
-			</form>
-			<?php if ( $has_tracking_token ) : ?>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-					<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_CLEAR_TRACKING_TOKEN ); ?>">
-					<?php wp_nonce_field( self::ACTION_CLEAR_TRACKING_TOKEN ); ?>
-					<?php submit_button( __( 'Clear tracking token', 'lomnio-api-connector' ), 'delete', 'submit', false ); ?>
-				</form>
-			<?php endif; ?>
-
-			<hr style="margin: 32px 0; max-width: 720px;">
 			<h2><?php echo esc_html__( 'Webhook signing secret', 'lomnio-api-connector' ); ?></h2>
 			<p>
 				<?php echo esc_html( $has_webhook_secret ? __( 'Configured', 'lomnio-api-connector' ) : __( 'Not configured', 'lomnio-api-connector' ) ); ?>
@@ -345,16 +286,6 @@ final class SettingsPage {
 			return;
 		}
 
-		if ( 'tracking_token_saved' === $status ) {
-			$this->notice( __( 'Website Tracking token saved securely.', 'lomnio-api-connector' ), 'success' );
-			return;
-		}
-
-		if ( 'tracking_token_cleared' === $status ) {
-			$this->notice( __( 'Website Tracking token cleared.', 'lomnio-api-connector' ), 'success' );
-			return;
-		}
-
 		if ( 'error' === $status ) {
 			$message = $this->error_message( $code );
 			$this->notice( $message, 'error' );
@@ -384,8 +315,6 @@ final class SettingsPage {
 			'lomnio_api_connector_invalid_token_payload' => __( 'Stored API token payload is invalid.', 'lomnio-api-connector' ),
 			'lomnio_api_connector_decrypt_failed'       => __( 'Could not decrypt the stored API token.', 'lomnio-api-connector' ),
 			'lomnio_webhook_empty_secret'               => __( 'Enter a webhook signing secret.', 'lomnio-api-connector' ),
-			'lomnio_tracking_empty_token'               => __( 'Enter a valid Website Tracking token.', 'lomnio-api-connector' ),
-			'lomnio_tracking_invalid_token_payload'     => __( 'Stored Website Tracking token payload is invalid.', 'lomnio-api-connector' ),
 		);
 
 		return $messages[ $code ] ?? __( 'Could not save the API token.', 'lomnio-api-connector' );
