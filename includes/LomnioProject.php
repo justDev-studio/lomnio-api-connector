@@ -33,6 +33,29 @@ if ( ! class_exists( 'LomnioProject' ) ) {
 		}
 
 		/**
+		 * Get all project standards files.
+		 *
+		 * @return object[]
+		 */
+		public static function get_standards(): array {
+			$project   = self::to_array();
+			$files     = is_array( $project ) && isset( $project['files'] ) && is_array( $project['files'] )
+				? $project['files']
+				: array();
+			$standards = array();
+
+			foreach ( $files as $file ) {
+				if ( ! is_array( $file ) || 'standards' !== ( $file['type'] ?? null ) ) {
+					continue;
+				}
+
+				$standards[] = json_decode( wp_json_encode( $file ) ?: '{}' ) ?: (object) array();
+			}
+
+			return $standards;
+		}
+
+		/**
 		 * Get the project repository for advanced usage.
 		 */
 		public static function repository(): \LomnioApiConnector\Database\ProjectRepository {

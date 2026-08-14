@@ -372,6 +372,16 @@ Project ID:
 $project_id = \LomnioProject::id();
 ```
 
+Project standards files (`type: standards`):
+
+```php
+$standards = \LomnioProject::get_standards();
+
+foreach ( $standards as $standard ) {
+	$standard_url = $standard->url;
+}
+```
+
 Units list:
 
 ```php
