@@ -47,6 +47,23 @@ if ( ! class_exists( 'LomnioUnits' ) ) {
 		}
 
 		/**
+		 * Get full unit objects referenced by a unit's similar_units field.
+		 *
+		 * Accepts either a stored unit object or the unit code used in the URL.
+		 *
+		 * @param object|string $unit Unit object or code.
+		 */
+		public static function get_similar( $unit ): array {
+			$current = is_object( $unit ) ? $unit : self::find_by_code( (string) $unit );
+
+			if ( ! is_object( $current ) || ! isset( $current->similar_units ) || ! is_array( $current->similar_units ) ) {
+				return array();
+			}
+
+			return self::repository()->get_units_by_ids( $current->similar_units );
+		}
+
+		/**
 		 * Get the units repository for advanced usage.
 		 */
 		public static function repository(): \LomnioApiConnector\Database\UnitRepository {

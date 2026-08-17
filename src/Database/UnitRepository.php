@@ -365,6 +365,39 @@ final class UnitRepository {
 	}
 
 	/**
+	 * Get units by API IDs while preserving the requested order.
+	 */
+	public function get_units_by_ids( array $unit_ids ): array {
+		$unit_ids = array_values(
+			array_unique(
+				array_map( 'strval', array_filter( $unit_ids, static fn( $unit_id ) => is_scalar( $unit_id ) && '' !== (string) $unit_id ) )
+			)
+		);
+
+		if ( empty( $unit_ids ) ) {
+			return array();
+		}
+
+		$units_by_id = array();
+
+		foreach ( $this->get_units( array( 'id' => $unit_ids ) ) as $unit ) {
+			if ( isset( $unit->id ) && is_scalar( $unit->id ) ) {
+				$units_by_id[ (string) $unit->id ] = $unit;
+			}
+		}
+
+		$units = array();
+
+		foreach ( $unit_ids as $unit_id ) {
+			if ( isset( $units_by_id[ $unit_id ] ) ) {
+				$units[] = $units_by_id[ $unit_id ];
+			}
+		}
+
+		return $units;
+	}
+
+	/**
 	 * Get table name using the WordPress table prefix.
 	 */
 	public function table_name(): string {

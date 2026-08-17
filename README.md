@@ -413,6 +413,21 @@ Single unit by code:
 $section['unit'] = \LomnioUnits::find_by_code( 'A101' );
 ```
 
+Similar units with full locally stored data:
+
+```php
+$apartment_code = \LomnioPages::unit_id();
+$section['similar_units'] = \LomnioUnits::get_similar( $apartment_code );
+```
+
+You can also pass an already loaded unit object:
+
+```php
+$section['similar_units'] = \LomnioUnits::get_similar( $section['unit'] );
+```
+
+The returned objects follow the order of the current unit's `similar_units` IDs. Missing, deleted, or unpublished units are omitted.
+
 Units by floor:
 
 ```php
