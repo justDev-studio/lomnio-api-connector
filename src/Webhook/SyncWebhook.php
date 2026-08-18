@@ -8,6 +8,8 @@
 namespace LomnioApiConnector\Webhook;
 
 use LomnioApiConnector\Database\DataRevision;
+use LomnioApiConnector\Database\FloorRepository;
+use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Security\SecretStorage;
 
@@ -32,15 +34,36 @@ final class SyncWebhook {
 	private UnitRepository $unit_repository;
 
 	/**
+	 * Floors database storage.
+	 *
+	 * @var FloorRepository
+	 */
+	private FloorRepository $floor_repository;
+
+	/**
+	 * Project database storage.
+	 *
+	 * @var ProjectRepository
+	 */
+	private ProjectRepository $project_repository;
+
+	/**
 	 * Encrypted API token storage.
 	 *
 	 * @var SecretStorage
 	 */
 	private SecretStorage $secret_storage;
 
-	public function __construct( ?UnitRepository $unit_repository = null, ?SecretStorage $secret_storage = null ) {
-		$this->unit_repository = $unit_repository ?? new UnitRepository();
-		$this->secret_storage  = $secret_storage ?? new SecretStorage();
+	public function __construct(
+		?UnitRepository $unit_repository = null,
+		?SecretStorage $secret_storage = null,
+		?FloorRepository $floor_repository = null,
+		?ProjectRepository $project_repository = null
+	) {
+		$this->unit_repository    = $unit_repository ?? new UnitRepository();
+		$this->secret_storage     = $secret_storage ?? new SecretStorage();
+		$this->floor_repository   = $floor_repository ?? new FloorRepository();
+		$this->project_repository = $project_repository ?? new ProjectRepository();
 	}
 
 	/**
@@ -162,7 +185,9 @@ final class SyncWebhook {
 			);
 		}
 
-		if ( 0 !== strpos( $event, 'unit.' ) ) {
+		$resource_type = strstr( $event, '.', true );
+
+		if ( ! in_array( $resource_type, array( 'unit', 'floor', 'project' ), true ) ) {
 			return new \WP_REST_Response(
 				array(
 					'success' => true,
@@ -173,55 +198,174 @@ final class SyncWebhook {
 			);
 		}
 
-		$unit_id = isset( $payload['unit_id'] ) ? (string) $payload['unit_id'] : '';
+		$processed = $this->process_resource( $resource_type, $payload, $event );
 
-		if ( '' === $unit_id ) {
+		if ( is_wp_error( $processed ) ) {
 			$this->release_delivery( $delivery );
-			return new \WP_Error(
-				'lomnio_webhook_missing_unit_id',
-				__( 'Unit webhook payload is missing unit_id.', 'lomnio-api-connector' ),
-				array( 'status' => 400 )
-			);
-		}
 
-		if ( ! empty( $payload['deleted'] ) || ( array_key_exists( 'visible', $payload ) && ! $payload['visible'] ) || 'unit.deleted' === $event ) {
-			$result = $this->unit_repository->delete_webhook_unit( $unit_id );
-			$status = 'deleted';
-		} else {
-			$unit = isset( $payload['unit'] ) && is_array( $payload['unit'] ) ? $payload['unit'] : array();
-
-			if ( empty( $unit['id'] ) || (string) $unit['id'] !== $unit_id ) {
-				$this->release_delivery( $delivery );
-				return new \WP_Error(
-					'lomnio_webhook_invalid_unit',
-					__( 'Webhook unit data is missing or does not match unit_id.', 'lomnio-api-connector' ),
-					array( 'status' => 400 )
-				);
+			if ( ! is_array( $processed->get_error_data() ) || ! isset( $processed->get_error_data()['status'] ) ) {
+				$processed->add_data( array( 'status' => 500 ) );
 			}
 
-			$project    = isset( $payload['project'] ) && is_array( $payload['project'] ) ? $payload['project'] : array();
-			$project_id = isset( $project['id'] ) ? (int) $project['id'] : 0;
-			$result     = $this->unit_repository->store_webhook_unit( $unit, $project_id );
-			$status     = 'updated';
-		}
-
-		if ( is_wp_error( $result ) ) {
-			$this->release_delivery( $delivery );
-			$result->add_data( array( 'status' => 500 ) );
-			return $result;
+			return $processed;
 		}
 
 		DataRevision::bump();
 
+		$id_key = $resource_type . '_id';
+
 		return new \WP_REST_Response(
 			array(
-				'success' => true,
-				'status'  => $status,
-				'event'   => $event,
-				'unit_id'  => $unit_id,
-				'delivery' => $delivery,
+				'success'       => true,
+				'status'        => $processed['status'],
+				'event'         => $event,
+				'resource_type' => $resource_type,
+				$id_key         => $processed['id'],
+				'delivery'      => $delivery,
 			),
 			200
+		);
+	}
+
+	/**
+	 * Store or delete one webhook resource.
+	 *
+	 * @return array|\WP_Error
+	 */
+	private function process_resource( string $resource_type, array $payload, string $event ) {
+		if ( 'unit' === $resource_type ) {
+			return $this->process_unit( $payload, $event );
+		}
+
+		if ( 'floor' === $resource_type ) {
+			return $this->process_floor( $payload, $event );
+		}
+
+		return $this->process_project( $payload, $event );
+	}
+
+	/**
+	 * Store or delete one unit snapshot.
+	 *
+	 * @return array|\WP_Error
+	 */
+	private function process_unit( array $payload, string $event ) {
+		$unit_id = isset( $payload['unit_id'] ) ? (string) $payload['unit_id'] : '';
+
+		if ( '' === $unit_id ) {
+			return $this->missing_id_error( 'unit' );
+		}
+
+		if ( $this->should_delete( $payload, $event, 'unit' ) ) {
+			$result = $this->unit_repository->delete_webhook_unit( $unit_id );
+			return is_wp_error( $result ) ? $result : array( 'id' => $unit_id, 'status' => 'deleted' );
+		}
+
+		$unit = isset( $payload['unit'] ) && is_array( $payload['unit'] ) ? $payload['unit'] : array();
+
+		if ( empty( $unit['id'] ) || (string) $unit['id'] !== $unit_id ) {
+			return $this->invalid_resource_error( 'unit' );
+		}
+
+		$project    = isset( $payload['project'] ) && is_array( $payload['project'] ) ? $payload['project'] : array();
+		$project_id = isset( $project['id'] ) ? (int) $project['id'] : 0;
+		$result     = $this->unit_repository->store_webhook_unit( $unit, $project_id );
+
+		return is_wp_error( $result ) ? $result : array( 'id' => $unit_id, 'status' => 'updated' );
+	}
+
+	/**
+	 * Store or delete one floor snapshot.
+	 *
+	 * @return array|\WP_Error
+	 */
+	private function process_floor( array $payload, string $event ) {
+		$floor    = isset( $payload['floor'] ) && is_array( $payload['floor'] ) ? $payload['floor'] : array();
+		$floor_id = isset( $payload['floor_id'] ) ? (string) $payload['floor_id'] : ( isset( $floor['id'] ) ? (string) $floor['id'] : '' );
+
+		if ( '' === $floor_id ) {
+			return $this->missing_id_error( 'floor' );
+		}
+
+		if ( $this->should_delete( $payload, $event, 'floor' ) ) {
+			$result = $this->floor_repository->delete_webhook_floor( $floor_id );
+			return is_wp_error( $result ) ? $result : array( 'id' => $floor_id, 'status' => 'deleted' );
+		}
+
+		if ( empty( $floor['id'] ) || (string) $floor['id'] !== $floor_id ) {
+			return $this->invalid_resource_error( 'floor' );
+		}
+
+		$project    = isset( $payload['project'] ) && is_array( $payload['project'] ) ? $payload['project'] : array();
+		$project_id = isset( $project['id'] ) ? (int) $project['id'] : 0;
+		$result     = $this->floor_repository->store_webhook_floor( $floor, $project_id );
+
+		return is_wp_error( $result ) ? $result : array( 'id' => $floor_id, 'status' => 'updated' );
+	}
+
+	/**
+	 * Store or delete one project snapshot.
+	 *
+	 * @return array|\WP_Error
+	 */
+	private function process_project( array $payload, string $event ) {
+		$project    = isset( $payload['project'] ) && is_array( $payload['project'] ) ? $payload['project'] : array();
+		$project_id = isset( $payload['project_id'] ) ? (string) $payload['project_id'] : ( isset( $project['id'] ) ? (string) $project['id'] : '' );
+
+		if ( '' === $project_id ) {
+			return $this->missing_id_error( 'project' );
+		}
+
+		if ( $this->should_delete( $payload, $event, 'project' ) ) {
+			$result = $this->project_repository->delete_webhook_project( $project_id );
+			return is_wp_error( $result ) ? $result : array( 'id' => $project_id, 'status' => 'deleted' );
+		}
+
+		if ( empty( $project['id'] ) || (string) $project['id'] !== $project_id ) {
+			return $this->invalid_resource_error( 'project' );
+		}
+
+		$result = $this->project_repository->store_webhook_project( $project );
+
+		return is_wp_error( $result ) ? $result : array( 'id' => $project_id, 'status' => 'updated' );
+	}
+
+	/**
+	 * Check whether a webhook resource must be removed.
+	 */
+	private function should_delete( array $payload, string $event, string $resource_type ): bool {
+		return ! empty( $payload['deleted'] )
+			|| ( array_key_exists( 'visible', $payload ) && ! $payload['visible'] )
+			|| $resource_type . '.deleted' === $event;
+	}
+
+	/**
+	 * Build a missing resource ID validation error.
+	 */
+	private function missing_id_error( string $resource_type ): \WP_Error {
+		return new \WP_Error(
+			'lomnio_webhook_missing_' . $resource_type . '_id',
+			sprintf(
+				/* translators: %s: webhook resource type. */
+				__( 'Webhook payload is missing %s_id.', 'lomnio-api-connector' ),
+				$resource_type
+			),
+			array( 'status' => 400 )
+		);
+	}
+
+	/**
+	 * Build an invalid resource snapshot validation error.
+	 */
+	private function invalid_resource_error( string $resource_type ): \WP_Error {
+		return new \WP_Error(
+			'lomnio_webhook_invalid_' . $resource_type,
+			sprintf(
+				/* translators: %s: webhook resource type. */
+				__( 'Webhook %s data is missing or does not match its ID.', 'lomnio-api-connector' ),
+				$resource_type
+			),
+			array( 'status' => 400 )
 		);
 	}
 

@@ -164,7 +164,9 @@ POST https://site.com/wp-json/lomnio/v1/webhook
 
 Configure the Lomnio project signing secret on the plugin settings page. Every request must include `X-Lomnio-Signature: sha256=...`; the plugin verifies the HMAC-SHA256 signature over the raw body and returns HTTP `401` when it is invalid. Delivery IDs from `X-Lomnio-Delivery` are deduplicated for seven days.
 
-`webhook.test` validates the integration without changing data. Unit events upsert the complete `unit` snapshot. When `deleted` is true or `visible` is false, the local unit is removed. No full pull synchronization is triggered.
+`webhook.test` validates the integration without changing data. `unit.*`, `floor.*`, and `project.*` events upsert the complete snapshot from the matching `unit`, `floor`, or `project` payload field. When `deleted` is true, `visible` is false, or the event ends in `.deleted`, the matching local resource is removed. No full pull synchronization is triggered.
+
+Unit events identify the resource with `unit_id`, floor events with `floor_id`, and project events with `project_id`. For create and update events, the ID must match the `id` inside the complete resource snapshot. Floor and unit snapshots use `project.id` as their local project relation.
 
 For temporary integration debugging, the most recently received request is shown to administrators on the Lomnio API Endpoints page. The view includes headers, raw body, JSON, form, query, and file parameters and can be cleared from the same page. Raw bodies larger than 1 MB are truncated.
 

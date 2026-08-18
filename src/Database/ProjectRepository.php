@@ -139,6 +139,37 @@ final class ProjectRepository {
 	}
 
 	/**
+	 * Store one complete project received through a webhook.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function store_webhook_project( array $project ) {
+		return $this->store_api_response( array( 'data' => $project ) );
+	}
+
+	/**
+	 * Remove a project deleted or unpublished in Lomnio.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function delete_webhook_project( $project_id ) {
+		$this->ensure_table();
+
+		global $wpdb;
+
+		$result = $wpdb->delete( $this->table_name(), array( 'project_id' => (int) $project_id ), array( '%d' ) );
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_webhook_project_delete_failed',
+				__( 'Could not remove the webhook project.', 'lomnio-api-connector' )
+			);
+		}
+
+		return true;
+	}
+
+	/**
 	 * Get the latest stored ProjectResource.
 	 *
 	 * @return array|null

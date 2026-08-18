@@ -105,55 +105,60 @@ final class FloorRepository {
 				continue;
 			}
 
-			$payload_json = wp_json_encode( $floor, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			$stored = $this->upsert_floor( $floor, $project_id, $now );
 
-			if ( ! is_string( $payload_json ) ) {
-				return new \WP_Error(
-					'lomnio_floors_json_encode_failed',
-					__( 'Could not encode floor payload for storage.', 'lomnio-api-connector' )
-				);
+			if ( is_wp_error( $stored ) ) {
+				return $stored;
 			}
 
-			$columns      = $this->columns_from_floor( $floor );
-			$floor_id     = $columns['floor_id'];
-			$payload_hash = hash( 'sha256', $payload_json );
-
-			$data = array_merge(
-				$columns,
-				array(
-					'project_id'     => $project_id,
-					'payload_hash'   => $payload_hash,
-					'payload_json'   => $payload_json,
-					'in_latest_list' => 1,
-					'fetched_at'     => $now,
-					'updated_at'     => $now,
-				)
-			);
-
-			$existing_id = (int) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT id FROM {$table} WHERE floor_id = %s LIMIT 1",
-					$floor_id
-				)
-			);
-
-			if ( $existing_id > 0 ) {
-				$result = $wpdb->update( $table, $data, array( 'id' => $existing_id ) );
-			} else {
-				$result = $wpdb->insert( $table, $data );
-			}
-
-			if ( false === $result ) {
-				return new \WP_Error(
-					'lomnio_floors_database_error',
-					__( 'Could not store floor payload in the database.', 'lomnio-api-connector' )
-				);
-			}
-
-			$stored_ids[] = $floor_id;
+			$stored_ids[] = $stored;
 		}
 
 		return $stored_ids;
+	}
+
+	/**
+	 * Store one complete floor received through a webhook.
+	 *
+	 * @return string|\WP_Error Stored floor ID.
+	 */
+	public function store_webhook_floor( array $floor, int $project_id = 0 ) {
+		if ( empty( $floor['id'] ) ) {
+			return new \WP_Error(
+				'lomnio_webhook_floor_missing_id',
+				__( 'Webhook floor payload is missing an ID.', 'lomnio-api-connector' )
+			);
+		}
+
+		$this->ensure_table();
+
+		return $this->upsert_floor(
+			$floor,
+			$project_id > 0 ? $project_id : $this->current_project_id(),
+			current_time( 'mysql' )
+		);
+	}
+
+	/**
+	 * Remove a floor deleted or unpublished in Lomnio.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function delete_webhook_floor( $floor_id ) {
+		$this->ensure_table();
+
+		global $wpdb;
+
+		$result = $wpdb->delete( $this->table_name(), array( 'floor_id' => (string) $floor_id ), array( '%s' ) );
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_webhook_floor_delete_failed',
+				__( 'Could not remove the webhook floor.', 'lomnio-api-connector' )
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -225,6 +230,59 @@ final class FloorRepository {
 			'facade_map_id'         => $this->string_value( $floor['facade_map_id'] ?? '' ),
 			'floor_plan_url'        => $this->string_value( $floor['floor_plan_url'] ?? '' ),
 		);
+	}
+
+	/**
+	 * Insert or update one complete floor payload.
+	 *
+	 * @return string|\WP_Error Stored floor ID.
+	 */
+	private function upsert_floor( array $floor, int $project_id, string $now ) {
+		global $wpdb;
+
+		$payload_json = wp_json_encode( $floor, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+
+		if ( ! is_string( $payload_json ) ) {
+			return new \WP_Error(
+				'lomnio_floors_json_encode_failed',
+				__( 'Could not encode floor payload for storage.', 'lomnio-api-connector' )
+			);
+		}
+
+		$columns  = $this->columns_from_floor( $floor );
+		$floor_id = $columns['floor_id'];
+		$data     = array_merge(
+			$columns,
+			array(
+				'project_id'     => $project_id,
+				'payload_hash'   => hash( 'sha256', $payload_json ),
+				'payload_json'   => $payload_json,
+				'in_latest_list' => 1,
+				'fetched_at'     => $now,
+				'updated_at'     => $now,
+			)
+		);
+		$table    = $this->table_name();
+
+		$existing_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE floor_id = %s LIMIT 1",
+				$floor_id
+			)
+		);
+
+		$result = $existing_id > 0
+			? $wpdb->update( $table, $data, array( 'id' => $existing_id ) )
+			: $wpdb->insert( $table, $data );
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_floors_database_error',
+				__( 'Could not store floor payload in the database.', 'lomnio-api-connector' )
+			);
+		}
+
+		return $floor_id;
 	}
 
 	/**

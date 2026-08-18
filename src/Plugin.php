@@ -79,7 +79,12 @@ final class Plugin {
 		$units_sync->hooks();
 		$floors_sync = new FloorsSync( $this->secret_storage(), new FloorRepository() );
 		$floors_sync->hooks();
-		$sync_webhook = new SyncWebhook( new UnitRepository(), $this->secret_storage() );
+		$sync_webhook = new SyncWebhook(
+			new UnitRepository(),
+			$this->secret_storage(),
+			new FloorRepository(),
+			new ProjectRepository()
+		);
 		$sync_webhook->hooks();
 		$image_proxy = new ImageProxy();
 		$image_proxy->hooks();
