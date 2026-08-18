@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'LOMNIO_API_CONNECTOR_VERSION', '0.1.2' );
+define( 'LOMNIO_API_CONNECTOR_REWRITE_VERSION', '1' );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_FILE', __FILE__ );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LOMNIO_API_CONNECTOR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -96,6 +97,21 @@ add_action(
 	static function (): void {
 		if ( class_exists( \LomnioApiConnector\Plugin::class ) ) {
 			\LomnioApiConnector\Plugin::instance()->boot();
+
+			add_action(
+				'init',
+				static function (): void {
+					$option_name = 'lomnio_api_connector_rewrite_version';
+
+					if ( LOMNIO_API_CONNECTOR_REWRITE_VERSION === get_option( $option_name ) ) {
+						return;
+					}
+
+					flush_rewrite_rules( false );
+					update_option( $option_name, LOMNIO_API_CONNECTOR_REWRITE_VERSION, false );
+				},
+				PHP_INT_MAX
+			);
 		}
 	}
 );
@@ -105,6 +121,7 @@ register_activation_hook(
 	static function (): void {
 		if ( class_exists( \LomnioApiConnector\Plugin::class ) ) {
 			\LomnioApiConnector\Plugin::instance()->activate();
+			update_option( 'lomnio_api_connector_rewrite_version', LOMNIO_API_CONNECTOR_REWRITE_VERSION, false );
 		}
 	}
 );
