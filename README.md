@@ -106,7 +106,12 @@ $unit_fields = \LomnioPages::fields( 'unit' );
 $floor_component = \LomnioPages::component( 'floor' );
 $unit_component = \LomnioPages::component( 'unit' );
 $not_found_component = \LomnioPages::not_found_component();
+
+$unit_seo = \LomnioPages::unit_seo( $unit );
+$floor_seo = \LomnioPages::floor_seo( $floor );
 ```
+
+`unit_seo()` and `floor_seo()` return `title`, `description`, and `canonical`. They generate route-specific fallback metadata and replace title or description only when the matching Yoast field is explicitly filled on the translated Unit Page or Floor Page settings post.
 
 Hidden API token settings page:
 

@@ -63,6 +63,14 @@ if ( ! class_exists( 'LomnioPages' ) ) {
 			return self::context()->seo( $title, $canonical, $description );
 		}
 
+		public static function unit_seo( object $unit ): array {
+			return self::context()->unit_seo( $unit );
+		}
+
+		public static function floor_seo( int $floor ): array {
+			return self::context()->floor_seo( $floor );
+		}
+
 		public static function context(): \LomnioApiConnector\Pages\PageContext {
 			return new \LomnioApiConnector\Pages\PageContext();
 		}

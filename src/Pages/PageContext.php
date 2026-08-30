@@ -139,6 +139,121 @@ final class PageContext {
 		);
 	}
 
+	/**
+	 * Build SEO metadata for a dynamic unit route.
+	 *
+	 * @param object $unit Normalized Lomnio unit data.
+	 */
+	public function unit_seo( object $unit ): array {
+		$site_name   = (string) get_bloginfo( 'name' );
+		$code        = trim( (string) ( $unit->code ?? '' ) );
+		$title       = '' !== $code ? $code . ' | ' . $site_name : $site_name;
+		$language    = defined( 'ICL_LANGUAGE_CODE' ) ? strtolower( (string) ICL_LANGUAGE_CODE ) : strtolower( substr( get_locale(), 0, 2 ) );
+		$type_labels = isset( $unit->type_labels ) ? (array) $unit->type_labels : array();
+		$unit_type   = (string) ( $type_labels[ $language ] ?? ( $unit->type ?? __( 'Nehnuteľnosť', 'lomnio-api-connector' ) ) );
+		$description = array(
+			sprintf( __( '%1$s %2$s v projekte %3$s.', 'lomnio-api-connector' ), $unit_type, $code, $site_name ),
+		);
+
+		if ( isset( $unit->room_count ) ) {
+			$description[] = sprintf( __( 'Počet izieb: %d.', 'lomnio-api-connector' ), (int) $unit->room_count );
+		}
+
+		if ( isset( $unit->areas->area ) && (float) $unit->areas->area > 0 ) {
+			$description[] = sprintf(
+				__( 'Celková plocha: %s m².', 'lomnio-api-connector' ),
+				number_format_i18n( (float) $unit->areas->area, 2 )
+			);
+		}
+
+		if ( isset( $unit->floor->number ) ) {
+			$description[] = sprintf( __( 'Podlažie: %d.', 'lomnio-api-connector' ), (int) $unit->floor->number );
+		}
+
+		$phase = $this->phase();
+
+		return $this->resolve_seo(
+			'unit',
+			array(
+				'title'       => $title,
+				'description' => implode( ' ', $description ),
+				'canonical'   => $this->unit_link( $code, '' !== $phase ? $phase : null ),
+			)
+		);
+	}
+
+	/**
+	 * Build SEO metadata for a dynamic floor route.
+	 */
+	public function floor_seo( int $floor ): array {
+		$site_name = (string) get_bloginfo( 'name' );
+		$phase     = $this->phase();
+
+		return $this->resolve_seo(
+			'floor',
+			array(
+				'title'       => sprintf( __( '%d. podlažie | %s', 'lomnio-api-connector' ), $floor, $site_name ),
+				'description' => sprintf(
+					__( 'Ponuka bytov na %1$d. podlaží projektu %2$s. Pozrite si aktuálne byty a apartmány na tomto podlaží.', 'lomnio-api-connector' ),
+					$floor,
+					$site_name
+				),
+				'canonical'   => $this->floor_link( '' !== $phase ? $phase : null, $floor ),
+			)
+		);
+	}
+
+	/**
+	 * Apply explicitly configured Yoast fields to generated route metadata.
+	 */
+	private function resolve_seo( string $page, array $fallback ): array {
+		$post_id = $this->settings_post_id( $page );
+
+		if ( ! $post_id || ! function_exists( 'YoastSEO' ) ) {
+			return $fallback;
+		}
+
+		try {
+			$yoast_meta = YoastSEO()->meta->for_post( $post_id );
+		} catch ( \Throwable $exception ) {
+			return $fallback;
+		}
+
+		if ( ! $yoast_meta ) {
+			return $fallback;
+		}
+
+		return array(
+			'title'       => $this->has_post_meta_value( $post_id, '_yoast_wpseo_title' )
+				? $this->first_value( array( $yoast_meta->title ?? '', $fallback['title'] ) )
+				: $fallback['title'],
+			'description' => $this->has_post_meta_value( $post_id, '_yoast_wpseo_metadesc' )
+				? $this->first_value( array( $yoast_meta->meta_description ?? '', $fallback['description'] ) )
+				: $fallback['description'],
+			'canonical'   => $fallback['canonical'],
+		);
+	}
+
+	private function has_post_meta_value( int $post_id, string $key ): bool {
+		if ( ! function_exists( 'get_post_meta' ) ) {
+			return false;
+		}
+
+		$value = get_post_meta( $post_id, $key, true );
+
+		return is_scalar( $value ) && '' !== trim( (string) $value );
+	}
+
+	private function first_value( array $values ): string {
+		foreach ( $values as $value ) {
+			if ( is_scalar( $value ) && '' !== trim( (string) $value ) ) {
+				return html_entity_decode( (string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			}
+		}
+
+		return '';
+	}
+
 	private function cache( string $key, callable $callback, int $ttl ): array {
 		if ( defined( 'WP_ENV' ) && 'development' === WP_ENV ) {
 			return $callback();

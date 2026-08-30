@@ -21,6 +21,39 @@ final class PageSettingsPostTypes {
 	public function hooks(): void {
 		add_action( 'init', array( $this, 'register' ) );
 		add_filter( 'wp_insert_post_data', array( $this, 'limit_single_settings_post' ), 10, 2 );
+		add_filter( 'wpseo_indexable_forced_included_post_types', array( $this, 'include_settings_in_yoast_indexables' ) );
+		add_filter( 'wpseo_accessible_post_types', array( $this, 'include_settings_in_yoast_admin' ) );
+	}
+
+	/**
+	 * Allow Yoast to resolve SEO data stored on the private settings posts.
+	 *
+	 * @param array $post_types Indexable post type names.
+	 * @return array
+	 */
+	public function include_settings_in_yoast_indexables( array $post_types ): array {
+		return array_values(
+			array_unique(
+				array_merge(
+					$post_types,
+					array( self::UNIT_POST_TYPE, self::FLOOR_POST_TYPE )
+				)
+			)
+		);
+	}
+
+	/**
+	 * Show Yoast fields for settings posts without exposing them to public SEO surfaces.
+	 *
+	 * @param array $post_types Accessible post type names.
+	 * @return array
+	 */
+	public function include_settings_in_yoast_admin( array $post_types ): array {
+		if ( ! is_admin() ) {
+			return $post_types;
+		}
+
+		return $this->include_settings_in_yoast_indexables( $post_types );
 	}
 
 	/**
