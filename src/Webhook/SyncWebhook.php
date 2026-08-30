@@ -12,6 +12,7 @@ use LomnioApiConnector\Database\FloorRepository;
 use LomnioApiConnector\Database\ProjectRepository;
 use LomnioApiConnector\Database\UnitRepository;
 use LomnioApiConnector\Security\SecretStorage;
+use LomnioApiConnector\Sync\SyncLock;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -25,6 +26,7 @@ final class SyncWebhook {
 	private const DELIVERY_PREFIX = 'lomnio_webhook_delivery_';
 	private const DELIVERY_TTL    = 604800;
 	private const CLEANUP_HOOK     = 'lomnio_api_connector_cleanup_webhook_delivery';
+	private const LOCK_TIMEOUT     = 5;
 
 	/**
 	 * Units database storage.
@@ -54,16 +56,25 @@ final class SyncWebhook {
 	 */
 	private SecretStorage $secret_storage;
 
+	/**
+	 * Cross-request synchronization lock.
+	 *
+	 * @var SyncLock
+	 */
+	private SyncLock $sync_lock;
+
 	public function __construct(
 		?UnitRepository $unit_repository = null,
 		?SecretStorage $secret_storage = null,
 		?FloorRepository $floor_repository = null,
-		?ProjectRepository $project_repository = null
+		?ProjectRepository $project_repository = null,
+		?SyncLock $sync_lock = null
 	) {
 		$this->unit_repository    = $unit_repository ?? new UnitRepository();
 		$this->secret_storage     = $secret_storage ?? new SecretStorage();
 		$this->floor_repository   = $floor_repository ?? new FloorRepository();
 		$this->project_repository = $project_repository ?? new ProjectRepository();
+		$this->sync_lock          = $sync_lock ?? new SyncLock();
 	}
 
 	/**
@@ -233,15 +244,40 @@ final class SyncWebhook {
 	 * @return array|\WP_Error
 	 */
 	private function process_resource( string $resource_type, array $payload, string $event ) {
-		if ( 'unit' === $resource_type ) {
-			return $this->process_unit( $payload, $event );
+		if ( 'project' === $resource_type ) {
+			return $this->process_project( $payload, $event );
 		}
 
-		if ( 'floor' === $resource_type ) {
-			return $this->process_floor( $payload, $event );
+		$lock_resource = 'unit' === $resource_type ? 'units' : 'floors';
+		$acquired      = $this->sync_lock->acquire( $lock_resource, self::LOCK_TIMEOUT );
+
+		if ( is_wp_error( $acquired ) ) {
+			$acquired->add_data( array( 'status' => 503 ) );
+			return $acquired;
 		}
 
-		return $this->process_project( $payload, $event );
+		if ( ! $acquired ) {
+			return new \WP_Error(
+				'lomnio_webhook_sync_busy',
+				__( 'The resource is currently being synchronized. Retry this webhook later.', 'lomnio-api-connector' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		try {
+			$result = 'unit' === $resource_type
+				? $this->process_unit( $payload, $event )
+				: $this->process_floor( $payload, $event );
+		} finally {
+			$released = $this->sync_lock->release( $lock_resource );
+		}
+
+		if ( is_wp_error( $released ) && ! is_wp_error( $result ) ) {
+			$released->add_data( array( 'status' => 500 ) );
+			return $released;
+		}
+
+		return $result;
 	}
 
 	/**

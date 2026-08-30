@@ -22,6 +22,7 @@ final class FloorsSync {
 	private const SETTINGS_OPTION = 'lomnio_api_connector_endpoint_settings';
 	private const META_OPTION     = 'lomnio_api_connector_endpoint_meta';
 	private const SCHEDULE_OPTION = 'lomnio_api_connector_floors_schedule_signature';
+	private const LOCK_RESOURCE   = 'floors';
 	private const API_BASE_URL    = 'https://app.lomnio.com/api';
 	private const API_LIST_PATH   = '/v1/floors';
 
@@ -39,9 +40,17 @@ final class FloorsSync {
 	 */
 	private FloorRepository $repository;
 
-	public function __construct( SecretStorage $secret_storage, FloorRepository $repository ) {
+	/**
+	 * Cross-request synchronization lock.
+	 *
+	 * @var SyncLock
+	 */
+	private SyncLock $sync_lock;
+
+	public function __construct( SecretStorage $secret_storage, FloorRepository $repository, ?SyncLock $sync_lock = null ) {
 		$this->secret_storage = $secret_storage;
 		$this->repository     = $repository;
+		$this->sync_lock      = $sync_lock ?? new SyncLock();
 	}
 
 	/**
@@ -95,7 +104,30 @@ final class FloorsSync {
 			return $error;
 		}
 
-		return $this->sync_list( $headers );
+		$acquired = $this->sync_lock->acquire( self::LOCK_RESOURCE );
+
+		if ( is_wp_error( $acquired ) ) {
+			$this->store_meta( false, $acquired->get_error_message() );
+			return $acquired;
+		}
+
+		if ( ! $acquired ) {
+			$this->store_pending_meta( __( 'Floors sync skipped: another floors write is already in progress.', 'lomnio-api-connector' ), 'Skipped' );
+			return true;
+		}
+
+		try {
+			$result = $this->sync_list( $headers );
+		} finally {
+			$released = $this->sync_lock->release( self::LOCK_RESOURCE );
+		}
+
+		if ( is_wp_error( $released ) && ! is_wp_error( $result ) ) {
+			$this->store_meta( false, $released->get_error_message() );
+			return $released;
+		}
+
+		return $result;
 	}
 
 	/**

@@ -90,31 +90,64 @@ final class FloorRepository {
 	public function store_list_floors( array $floors ) {
 		$this->ensure_table();
 
+		return Transaction::run(
+			function() use ( $floors ) {
+				$now        = current_time( 'mysql' );
+				$project_id = $this->current_project_id();
+				$stored_ids = array();
+
+				foreach ( $floors as $floor ) {
+					if ( ! is_array( $floor ) || empty( $floor['id'] ) ) {
+						continue;
+					}
+
+					$stored = $this->upsert_floor( $floor, $project_id, $now );
+
+					if ( is_wp_error( $stored ) ) {
+						return $stored;
+					}
+
+					$stored_ids[] = $stored;
+				}
+
+				$hidden = $this->hide_floors_missing_from_list( $stored_ids );
+
+				return is_wp_error( $hidden ) ? $hidden : $stored_ids;
+			},
+			'lomnio_floors_transaction_error',
+			__( 'Could not update the floors list atomically.', 'lomnio-api-connector' )
+		);
+	}
+
+	/**
+	 * Hide floors the latest non-empty list no longer contains.
+	 *
+	 * @return true|\WP_Error
+	 */
+	private function hide_floors_missing_from_list( array $stored_ids ) {
 		global $wpdb;
 
-		$table      = $this->table_name();
-		$now        = current_time( 'mysql' );
-		$project_id = $this->current_project_id();
-
-		$wpdb->update( $table, array( 'in_latest_list' => 0 ), array( 'in_latest_list' => 1 ), array( '%d' ), array( '%d' ) );
-
-		$stored_ids = array();
-
-		foreach ( $floors as $floor ) {
-			if ( ! is_array( $floor ) || empty( $floor['id'] ) ) {
-				continue;
-			}
-
-			$stored = $this->upsert_floor( $floor, $project_id, $now );
-
-			if ( is_wp_error( $stored ) ) {
-				return $stored;
-			}
-
-			$stored_ids[] = $stored;
+		if ( empty( $stored_ids ) ) {
+			return true;
 		}
 
-		return $stored_ids;
+		$table        = $this->table_name();
+		$placeholders = implode( ', ', array_fill( 0, count( $stored_ids ), '%s' ) );
+		$result       = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table} SET in_latest_list = 0 WHERE in_latest_list = 1 AND floor_id NOT IN ({$placeholders})",
+				array_map( 'strval', $stored_ids )
+			)
+		);
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'lomnio_floors_cleanup_error',
+				__( 'Could not hide floors missing from the latest list.', 'lomnio-api-connector' )
+			);
+		}
+
+		return true;
 	}
 
 	/**
