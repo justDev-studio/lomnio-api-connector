@@ -39,6 +39,7 @@
 	var flushTimer = null;
 	var pageStartedAt = Date.now();
 	var durationRecorded = false;
+	var initialNavigationHandled = false;
 	var lastUnitViewKey = null;
 	var lastPageUrl = cleanUrl(window.location.href);
 	var previousUrl = cleanUrl(document.referrer);
@@ -409,6 +410,15 @@
 
 	window.addEventListener('lomnio:consent', consentEvent);
 	document.addEventListener('inertia:navigate', function () {
+		// Inertia fires `inertia:navigate` for the initial page load too, and
+		// that page is already recorded below — without this guard every load
+		// produced a duplicate page_view and a zero-second time_on_page.
+		if ( ! initialNavigationHandled ) {
+			initialNavigationHandled = true;
+			if ( cleanUrl(window.location.href) === lastPageUrl ) {
+				return;
+			}
+		}
 		recordDuration();
 		window.setTimeout(recordPage, 0);
 	});

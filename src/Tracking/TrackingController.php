@@ -94,16 +94,54 @@ final class TrackingController {
 				);
 			}
 
+			if ( $this->has_degenerate_timestamp( $result ) ) {
+				continue;
+			}
+
 			$validated[] = $result;
 		}
 
-		$result = $this->sender->send( $validated );
+		if ( empty( $validated ) ) {
+			return new \WP_REST_Response(
+				array(
+					'created'    => 0,
+					'duplicates' => 0,
+					'ignored'    => count( $events ),
+				),
+				200
+			);
+		}
+
+		$result = $this->sender->send( $validated, $this->request_user_agent( $request ) );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
 		return new \WP_REST_Response( $result['body'], (int) $result['status_code'] );
+	}
+
+	/**
+	 * Whether the event timestamp is too artificial to come from a real clock.
+	 *
+	 * Render and cache-warming bots (headless page loaders) report a clock
+	 * truncated to the start of the day — `Date.now()` landing on the exact
+	 * UTC midnight millisecond does not happen organically. These loads are
+	 * not visitors; dropping them silently keeps the rest of the batch alive.
+	 *
+	 * @param array $event Validated event payload with ts in milliseconds.
+	 */
+	private function has_degenerate_timestamp( array $event ): bool {
+		return isset( $event['ts'] ) && 0 === (int) $event['ts'] % ( DAY_IN_SECONDS * 1000 );
+	}
+
+	/**
+	 * The User-Agent of the browser that posted the batch.
+	 */
+	private function request_user_agent( \WP_REST_Request $request ): string {
+		$user_agent = (string) $request->get_header( 'user_agent' );
+
+		return substr( sanitize_text_field( $user_agent ), 0, 500 );
 	}
 
 	/**

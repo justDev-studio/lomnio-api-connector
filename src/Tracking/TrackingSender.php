@@ -28,9 +28,15 @@ final class TrackingSender {
 	/**
 	 * Send one validated batch to Lomnio.
 	 *
+	 * Lomnio filters bots and derives the device type from the User-Agent of
+	 * the request it receives. Without the visitor's own UA every event
+	 * arrives as this server's UA — all traffic counts as desktop and no
+	 * crawler is ever filtered — so the proxy must pass it through.
+	 *
+	 * @param string $user_agent The originating browser's User-Agent, or ''.
 	 * @return array|\WP_Error
 	 */
-	public function send( array $events ) {
+	public function send( array $events, string $user_agent = '' ) {
 		$settings = $this->settings();
 
 		if ( empty( $settings['active'] ) ) {
@@ -82,17 +88,20 @@ final class TrackingSender {
 			);
 		}
 
+		$forwarded_headers = array(
+			'Accept'       => 'application/json',
+			'Content-Type' => 'application/json',
+		);
+
+		if ( '' !== $user_agent ) {
+			$forwarded_headers['User-Agent'] = $user_agent;
+		}
+
 		$response = wp_safe_remote_post(
 			self::API_URL,
 			array(
 				'timeout' => 10,
-				'headers' => array_merge(
-					$headers,
-					array(
-						'Accept'       => 'application/json',
-						'Content-Type' => 'application/json',
-					)
-				),
+				'headers' => array_merge( $headers, $forwarded_headers ),
 				'body'    => $body,
 			)
 		);
