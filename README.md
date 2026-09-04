@@ -247,6 +247,18 @@ window.dispatchEvent(
 );
 ```
 
+When `Consent required` is selected, the plugin also loads a OneTrust bridge after
+the SDK. It grants tracking when either `C0002` or `C0007` is active, rechecks on
+consent changes, and revokes tracking when neither group is active. Revocation
+clears the SDK visitor/session identity, UTM storage, and queued events.
+
+These default groups mirror the Strabag/Brenner OneTrust configuration; verify
+the group mapping before using the bridge on another site. If OneTrust is absent,
+the bridge never grants consent. Other consent managers can use the event above.
+The bridge is not loaded in `Always` mode, and existing saved settings are not
+changed automatically. Theme-owned form attribution storage is separate and is
+not managed by this SDK bridge.
+
 A Vue adapter that can be copied into the theme is provided at:
 
 ```text
