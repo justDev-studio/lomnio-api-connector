@@ -104,6 +104,7 @@ $plugin_root = dirname( __DIR__ );
 
 require_once $plugin_root . '/src/Pages/PageSettings.php';
 require_once $plugin_root . '/src/Pages/PageSettingsPostTypes.php';
+require_once $plugin_root . '/src/Units/UnitCode.php';
 require_once $plugin_root . '/src/Pages/PageContext.php';
 require_once $plugin_root . '/includes/LomnioPages.php';
 
@@ -133,6 +134,17 @@ assert_same_value(
 	$unit_seo['description']
 );
 assert_same_value( 'unit canonical', 'https://example.test/apartment/13.5', $unit_seo['canonical'] );
+
+assert_same_value( 'unit URL replaces spaces', 'https://example.test/apartment/H1-02-A1', LomnioPages::unit_link( 'H1 02 A1' ) );
+assert_same_value( 'unit URL trims and collapses whitespace', 'https://example.test/apartment/H1-02-A1', LomnioPages::unit_link( " \tH1  02\nA1 " ) );
+assert_same_value( 'unit URL normalizes non-breaking spaces', 'https://example.test/apartment/H1-02-A1', LomnioPages::unit_link( "\u{00A0}H1\u{00A0}02\u{202F}A1\u{00A0}" ) );
+assert_same_value( 'unit URL preserves punctuation', 'https://example.test/apartment/-H1_02.A-1-', LomnioPages::unit_link( '-H1_02.A-1-' ) );
+assert_same_value( 'unit URL preserves phase', 'https://example.test/apartment/phase-1/H1-02-A1', LomnioPages::unit_link( 'H1 02 A1', 'phase-1' ) );
+$spaced_unit = clone $unit;
+$spaced_unit->code = 'H1 02 A1';
+$spaced_seo = LomnioPages::unit_seo( $spaced_unit );
+assert_same_value( 'normalized canonical preserves display title', 'H1 02 A1 | Brenner', $spaced_seo['title'] );
+assert_same_value( 'canonical uses normalized URL', 'https://example.test/apartment/H1-02-A1', $spaced_seo['canonical'] );
 
 $floor_seo = LomnioPages::floor_seo( 13 );
 

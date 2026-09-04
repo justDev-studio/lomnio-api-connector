@@ -8,6 +8,7 @@
 namespace LomnioApiConnector\Database;
 
 use LomnioApiConnector\Pages\PageContext;
+use LomnioApiConnector\Units\UnitCode;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -385,9 +386,25 @@ final class UnitRepository {
 	 * Get a single unit by code.
 	 */
 	public function get_unit_by_code( string $code ): ?object {
-		$units = $this->get_units( array( 'code' => $code ) );
+		$route_segment = UnitCode::route_segment( $code );
 
-		return $units[0] ?? null;
+		if ( '' === $route_segment ) {
+			return null;
+		}
+
+		$this->ensure_table();
+		global $wpdb;
+		$rows = $wpdb->get_results( "SELECT unit_id, code FROM {$this->table_name()} WHERE in_latest_list = 1", ARRAY_A ) ?: array();
+		$ids  = array();
+
+		foreach ( $rows as $row ) {
+			if ( $route_segment === UnitCode::route_segment( (string) $row['code'] ) ) {
+				$ids[] = $row['unit_id'];
+			}
+		}
+
+		// Never route an ambiguous normalized code to an arbitrary unit.
+		return 1 === count( $ids ) ? $this->get_unit_by_id( $ids[0] ) : null;
 	}
 
 	/**

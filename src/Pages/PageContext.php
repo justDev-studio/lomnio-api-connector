@@ -7,6 +7,8 @@
 
 namespace LomnioApiConnector\Pages;
 
+use LomnioApiConnector\Units\UnitCode;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -68,7 +70,7 @@ final class PageContext {
 			$url = trailingslashit( $url . trim( $phase, '/' ) );
 		}
 
-		$url .= rawurlencode( $unit_id );
+		$url .= rawurlencode( UnitCode::route_segment( $unit_id ) );
 
 		return (string) apply_filters( 'wpml_permalink', $url );
 	}
