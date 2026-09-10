@@ -18,6 +18,7 @@ use LomnioApiConnector\Pages\PageRouter;
 use LomnioApiConnector\Pages\PageSettings;
 use LomnioApiConnector\Pages\PageSettingsPostTypes;
 use LomnioApiConnector\Security\SecretStorage;
+use LomnioApiConnector\Seo\ApartmentsSitemap;
 use LomnioApiConnector\Sync\FloorsSync;
 use LomnioApiConnector\Sync\ProjectSync;
 use LomnioApiConnector\Sync\UnitsSync;
@@ -93,6 +94,8 @@ final class Plugin {
 		$page_settings_post_types->hooks();
 		$page_router   = new PageRouter( $page_settings );
 		$page_router->hooks();
+		$apartments_sitemap = new ApartmentsSitemap();
+		$apartments_sitemap->hooks();
 		$tracking_sender = new TrackingSender( $this->secret_storage() );
 		$tracking_controller = new TrackingController( $tracking_sender );
 		$tracking_controller->hooks();
